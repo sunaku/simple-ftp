@@ -17,7 +17,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
-
+#include <fcntl.h>
 
 	/* debugging */
 	
@@ -72,6 +72,45 @@
 		};
 		
 		/**
+		 * Returns a string containing the absolute path which joins the basePath to the extension.
+		 * @param a_result	Storage for resulting path; must have minimum size PATH_MAX
+		 */
+		Boolean service_getAbsolutePath(const String a_basePath, const String a_extension, String a_result)
+		{
+			char tempPath[PATH_MAX+1];
+			int tempLen;
+			
+			// init
+				memset(&tempPath, 0, sizeof(tempPath));
+				
+			// assemble absolute path from arg
+				if(a_extension[0] == '/')
+					strcpy(tempPath, a_extension);
+				
+				else
+				{
+					strcpy(tempPath, a_basePath);
+					
+					// append extension
+						if((tempLen = strlen(a_basePath)) + strlen(a_extension) < sizeof(tempPath))
+						{
+							tempPath[tempLen++] = '/'; // relative path
+							strcpy(&tempPath[tempLen], a_extension);
+						}
+				}
+				
+			// conv to absolute
+				
+				realpath(tempPath, a_result);
+				
+				#ifndef NODEBUG
+					printf("service_getAbsolutePath(): before='%s', after='%s'\n", tempPath, a_result);
+				#endif
+			
+			return true;
+		};
+		
+		/**
 		 * Handles commands given in interaction/dialouge.
 		 */
 		Boolean service_handleCmd(const int a_socket, const String a_cmdStr);
@@ -90,6 +129,24 @@
 				
 			return siftp_send(a_socket, &msg);
 		};
+
+		/**
+		 * Returns a pointer to the next word in the string.
+		 * Assumes words are separated by spaces.
+		 */
+		String service_handleCmd_getNextArg(const String a_str)
+		{
+			String arg;
+			
+			if((arg = strchr(a_str, ' ')) != NULL)
+			{
+				while(*arg == ' ') // skip whitespace
+					*arg++;
+			}
+			
+			return arg;
+		};
+
 		
 		/**
 		 * Returns the value of the command staus acknowlegdement.
@@ -123,47 +180,28 @@
 					return false;
 			
 			// variables
-				int tempLen;
-				char tempPath[PATH_MAX+1];
 				struct stat fileStats;
+				char path[PATH_MAX+1];
 				
 			// init variables
-				memset(&tempPath, 0, sizeof(tempPath));
+				memset(&path, 0, sizeof(path));
 			
-			
-			// assemble absolute path from arg
-				if(a_cmdArg[0] == '/')
-					strcpy(tempPath, a_cmdArg);
-				
-				else
+				if(service_getAbsolutePath(a_pwd, a_cmdArg, path))
 				{
-					strcpy(tempPath, a_pwd);
-					
-					// append arg to current path
-						if((tempLen = strlen(a_pwd)) + strlen(a_cmdArg) < sizeof(tempPath))
-						{
-							tempPath[tempLen++] = '/'; // relative path
-							strcpy(&tempPath[tempLen], a_cmdArg);
-						}
-				}
-				
-			// change path
-				if(stat(tempPath, &fileStats) >= 0 && S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR))
-				{
-					realpath(tempPath, a_pwd);
-					
-					#ifndef NODEBUG
-						printf("service_handleCmd_chdir()(): tempPath='%s', a_pwd='%s'\n", tempPath, a_pwd);
-					#endif
-				}
-				else
-				{
-					perror(a_cmdStr);
-					return false;
+					if(stat(path, &fileStats) >= 0 && S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR))
+					{
+						strcpy(a_pwd, path);
+					}
+					else
+					{
+						perror(a_cmdStr);
+						return false;
+					}
 				}
 
 			return true;
 		};
+		
 		
 		/**
 		 * Returns contents of a file.
@@ -268,5 +306,76 @@
 			
 			return buf;
 		};
+		
+		/**
+		 * Writes data to the given path.
+		 * @param	a_path	Path to which data will be written.
+		 * @param	a_data	Data to be written.
+		 * @param	a_length	Number of bytes of data to write.
+		 */
+		Boolean service_handleCmd_writeFile(const String a_path, const String a_data, const int a_length)
+		{
+			int fileFd;
+			Boolean result = false;
+			
+			if((fileFd = open(a_path, O_WRONLY)) >= 0)
+			{
+				if(write(fileFd, a_data, a_length) != -1)
+					result = true;
+				else
+					perror("service_handleCmd_writeFile()");
+				
+				close(fileFd);
+			}
+			else
+				perror("service_handleCmd_writeFile()");
+			
+			#ifndef NODEBUG
+				printf("writeFile(): wrote file='%s', length=%d, &data=%p, data='%s'.\n", a_path, a_length, a_data, a_data);
+			#endif
+			
+			return result;
+		};
+		
+		
+		/**
+		 * Changes the path of the current working dir.
+		 * @param	a_pwd		Storage for new current working dir value.
+		 */
+		Boolean service_handleCmd_sendFile(const int a_socket, const String a_filePath)
+		{
+			// variables
+				struct stat fileStats;
+				String buf;
+				int bufLen;
+				Boolean tempStatus;
+				
+			// init variables
+			
+				if(stat(a_filePath, &fileStats) >= 0 && !S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR))
+				{
+					if((buf = service_handleCmd_readFile(a_filePath, &bufLen)) != NULL)
+					{
+						if(service_handleCmd_sendStatus(a_socket, true))
+						{
+							tempStatus = siftp_sendData(a_socket, buf, bufLen);
+							
+							#ifndef NODEBUG 
+								printf("get(): sent file '%s'.\n", a_filePath);
+							#endif
+						}
+						
+						free(buf);
+						return tempStatus;
+					}
+				}
+				else
+				{
+					perror("service_handleCmd_sendFile()");
+				}
+
+			return false;
+		};
+		
 #endif
 
