@@ -89,7 +89,12 @@ Boolean service_create(int *ap_socket, const int a_port)
 {
 	// variables
 		struct sockaddr_in serverAddr;
-		int yes=1;
+		
+		#ifdef _PLATFORM_SOLARIS
+			char yes='1';
+		#else
+			int yes=1;
+		#endif
 		
 	// create address
 		memset(&serverAddr, 0, sizeof(serverAddr));
