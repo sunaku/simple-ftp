@@ -6,12 +6,14 @@
 **/
 
 #include "service.h"
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 #include <dirent.h>
 #include <fcntl.h>
 
@@ -195,44 +197,44 @@ Boolean service_handleCmd_chdir(String a_currPath, const String a_newPath)
 	return true;
 }
 
-
 String service_readFile(const String a_path, int *ap_length)
 {
-	// variables
-		String buf = NULL;
-		FILE *p_fileFd;
-		struct stat fileStats;
-	
-	if(stat(a_path, &fileStats) != -1)
+	String buf = NULL;
+	FILE *p_fileFd;
+
+	// check perms
+	if(service_statTest(a_path, S_IFMT, S_IFREG))
 	{
-		// check perms
-		if(S_ISREG(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR)) 
+		if((p_fileFd = fopen(a_path, "rb")) != NULL)
 		{
-			if((p_fileFd = fopen(a_path, "rb")) != NULL)
-			{
-				// determine file size
-					fseek(p_fileFd, 0, SEEK_END);
-					*ap_length = ftell(p_fileFd) + 1; // +1 for null term
-					rewind(p_fileFd);
+			// determine file size
+				fseek(p_fileFd, 0, SEEK_END);
+				*ap_length = ftell(p_fileFd);
+				rewind(p_fileFd);
+				
+			// allocate buffer
+				if((buf = calloc(*ap_length+1, sizeof(char))) == NULL) // +1 for null term
+				{
+					fclose(p_fileFd);
+					*ap_length=0;
 					
-				// allocate buffer
-					if((buf = calloc(*ap_length, sizeof(char))) == NULL)
-					{
-						fclose(p_fileFd);
-						
-						fprintf(stderr, "readFile(): calloc() for buffer failed.\n");
-						return false;
-					}
+					fprintf(stderr, "readFile(): buffer alloc failed.\n");
+					return false;
+				}
+				
+			// read contents into buffer
+				if(fread(buf, sizeof(char), *ap_length, p_fileFd) != *ap_length)
+				{
+					perror("readFile()");
 					
-				// read contents into buffer
-				fread(buf, sizeof(char), *ap_length-1, p_fileFd); // -1 to preserve null term
-			}
-			else
-				perror("readFile()");
+					free(buf);
+					buf = NULL;
+					*ap_length=0;
+				}
 		}
+		else
+			perror("readFile()");
 	}
-	else
-		perror("readFile()");
 	
 	return buf;
 }
@@ -324,3 +326,24 @@ Boolean service_writeFile(const String a_path, const String a_data, const int a_
 	return result;
 }
 
+Boolean service_permTest(const String a_path, const String a_mode)
+{
+	FILE *p_fileFd;
+	Boolean result = false;
+	
+	// try open file for reading
+	if((p_fileFd = fopen(a_path, a_mode)) != NULL)
+	{
+		fclose(p_fileFd);
+		result = true;
+	}
+	
+	return result;
+}
+
+inline Boolean service_statTest(const String a_path, const int a_testMode, const int a_resultMode)
+{
+	struct stat s;
+	
+	return (stat(a_path, &s) != -1) && ((s.st_mode & a_testMode) == a_resultMode);
+}
