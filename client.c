@@ -7,12 +7,14 @@
 
 #include "model.h"
 #include "client.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -185,7 +187,7 @@ void service_loop(const int a_socket)
 				*bufCR = '\0';
 			
 			#ifndef NODEBUG
-				printf("service_loop(): got command {str='%s',arg='%s'}\n", buf, strchr(buf, ' '));
+				printf("\nservice_loop(): got command {str='%s',arg='%s'}\n", buf, strchr(buf, ' '));
 			#endif
 			
 		// handle commands
@@ -203,8 +205,8 @@ void service_loop(const int a_socket)
 				printf("\nlpwd\n  displays path of local current working directory.\n");
 				printf("\ncd <path>\n  changes the remote current working directory to the specified <path>.\n");
 				printf("\nlcd <path>\n  changes the local current working directory to the specified <path>.\n");
-				printf("\nget <file>\n  downloads the remote <file> to local current working directory.\n");
-				printf("\nput <file>\n  uploads the local <file> to remote current working directory.\n");
+				printf("\nget <src> [dest]\n  downloads the remote <src> to local current working directory by the name of [dest] if specified.\n");
+				printf("\nput <src> [dest]\n  uploads the local <src> file to remote current working directory by the name of [dest] if specified.\n");
 				printf("\nhelp\n  displays this message.\n");
 				printf("\nexit\n  terminates this program.\n");
 			}
@@ -230,6 +232,8 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 		String cmdArg, dataBuf;
 		int dataBufLen;
 		
+		Boolean tempStatus;
+		
 	// init variables
 		Message_clear(&msgOut);
 		Message_clear(&msgIn);
@@ -239,8 +243,7 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
 		
 		// argument string
-			if((cmdArg = strchr(a_cmdStr, ' ')) != NULL)
-				cmdArg += sizeof(char);
+			cmdArg = service_handleCmd_getNextArg(a_cmdStr);
 		
 	if(strstr(cmdName, "lls"))
 	{
@@ -273,8 +276,11 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 		// perform command
 			if(remote_exec(a_socket, &msgOut))
 			{
-				//if(strstr(cmdName, "cd") == NULL) // this command doesn't print output
-				//{
+				if(strstr(cmdName, "cd") != NULL) // no output
+					return true;
+				
+				else
+				{
 					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
 					{
 						printf("%s", dataBuf);
@@ -282,8 +288,41 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 						
 						return true;
 					}
-				//}
+				}
 			}
+	}
+	
+	else if(strstr(cmdName, "get") && cmdArg != NULL)
+	{
+		String destFn;
+		char destPath[PATH_MAX+1];
+		
+		// init vars
+			if((destFn = service_handleCmd_getNextArg(cmdArg)) == NULL)
+				destFn = cmdArg;
+			
+			tempStatus = false;
+		
+		// build command
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
+			Message_setValue(&msgOut, a_cmdStr);
+			
+		// perform command
+			if(remote_exec(a_socket, &msgOut))
+			{
+				if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
+				{
+					// determine destination file path
+					if(service_getAbsolutePath(g_pwd, destFn, destPath))
+					{
+						tempStatus = service_handleCmd_writeFile(destPath, dataBuf, dataBufLen-1);
+					}
+					
+					free(dataBuf);
+				}
+			}
+			
+		return tempStatus;
 	}
 	
 	return false;
