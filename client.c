@@ -326,7 +326,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 			if(service_getAbsolutePath(g_pwd, dst, dstPath))
 			{
 				// check write perms & file type
-				if(service_permTest(dstPath, "a") && service_statTest(dstPath, S_IFMT, S_IFREG))
+				if(service_permTest(dstPath, SERVICE_FILE_PERMS_WRITETEST) && service_statTest(dstPath, S_IFMT, S_IFREG))
 				{
 					// perform command
 					if(remote_exec(a_socket, &msgOut))
@@ -372,7 +372,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 			if(service_getAbsolutePath(g_pwd, src, srcPath))
 			{
 				// check read perms & file type
-				if(service_permTest(srcPath, "r") && service_statTest(srcPath, S_IFMT, S_IFREG))
+				if(service_permTest(srcPath, SERVICE_FILE_PERMS_READTEST) && service_statTest(srcPath, S_IFMT, S_IFREG))
 				{
 					// try to read source file
 					if((dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)

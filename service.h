@@ -13,6 +13,8 @@
 
 #include "siftp.h"
 
+#include <fcntl.h>
+
 	/* constants */
 	
 		/** max length of a service command's name */
@@ -23,6 +25,9 @@
 		
 		/** default permissions when writing a file */
 		#define SERVICE_FILE_PERMS	( S_IREAD | S_IWRITE )
+		
+		#define SERVICE_FILE_PERMS_READTEST	( O_RDONLY )
+		#define SERVICE_FILE_PERMS_WRITETEST	( O_WRONLY|O_CREAT )
 		
 	/* services */
 	
@@ -111,12 +116,11 @@
 		Boolean service_handleCmd_chdir(String a_currPath, const String a_newPath);
 		
 		/**
-		 * Returns true if the file is accessible under the given mode.
+		 * Returns true if the path is accessible under the given permissions.
 		 * @param	a_path	Path to test.
-		 * @param	a_mode	The mode, used in <tt>fopen()</tt>, to test.
-		 * @see	fopen
+		 * @param	a_mode	Permission bits (see fcntl.h)
 		 */
-		Boolean service_permTest(const String a_path, const String a_mode);
+		Boolean service_permTest(const String a_path, const int a_mode);
 		
 		/**
 		 * Returns true if the path has all of the given attributes. <tt>errno</tt> is also set upon failure.

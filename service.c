@@ -326,20 +326,20 @@ Boolean service_writeFile(const String a_path, const String a_data, const int a_
 	return result;
 }
 
-Boolean service_permTest(const String a_path, const String a_mode)
+Boolean service_permTest(const String a_path, const int a_mode)
 {
-	FILE *p_fileFd;
+	int fd;
 	Boolean result = false;
 	
-	// try open file for reading
-	if((p_fileFd = fopen(a_path, a_mode)) != NULL)
+	if((fd = open(a_path, a_mode)) != -1)
 	{
-		fclose(p_fileFd);
+		close(fd);
 		result = true;
 	}
 	
 	return result;
 }
+
 
 inline Boolean service_statTest(const String a_path, const int a_testMode, const int a_resultMode)
 {
