@@ -23,11 +23,8 @@
 		/** argument separators in a command string */
 		#define SERVICE_COMMAND_ARGUMENT_DELIMITERS	" \t"
 		
-		/** default permissions when writing a file */
-		#define SERVICE_FILE_PERMS	( S_IREAD | S_IWRITE )
-		
-		#define SERVICE_FILE_PERMS_READTEST	( O_RDONLY )
-		#define SERVICE_FILE_PERMS_WRITETEST	( O_WRONLY|O_CREAT )
+		#define SERVICE_PERMS_READ_TEST	"r"
+		#define SERVICE_PERMS_WRITE_TEST	"a"
 		
 	/* services */
 	
@@ -118,9 +115,10 @@
 		/**
 		 * Returns true if the path is accessible under the given permissions.
 		 * @param	a_path	Path to test.
-		 * @param	a_mode	Permission bits (see fcntl.h)
+		 * @param	a_mode	Access mode (same as fopen()).
+		 * @see <tt>fopen</tt> for access modes.
 		 */
-		Boolean service_permTest(const String a_path, const int a_mode);
+		Boolean service_permTest(const String a_path, const String a_mode);
 		
 		/**
 		 * Returns true if the path has all of the given attributes. <tt>errno</tt> is also set upon failure.
@@ -152,9 +150,8 @@
 		 * @param	a_path	Path to which data will be written.
 		 * @param	a_data	Data to be written.
 		 * @param	a_length	Number of bytes of data to write.
-		 * @param	a_mode	Permission bits.
 		 */
-		Boolean service_writeFile(const String a_path, const String a_data, const int a_length, const int a_mode);
+		Boolean service_writeFile(const String a_path, const String a_data, const int a_length);
 		
 #endif
 

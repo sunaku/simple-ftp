@@ -173,7 +173,6 @@ Boolean service_handleCmd_chdir(String a_currPath, const String a_newPath)
 			return false;
 	
 	// variables
-		struct stat fileStats;
 		char path[PATH_MAX+1];
 		
 	// init variables
@@ -183,7 +182,7 @@ Boolean service_handleCmd_chdir(String a_currPath, const String a_newPath)
 		if(service_getAbsolutePath(a_currPath, a_newPath, path))
 		{
 			// check inode type & perms
-			if(stat(path, &fileStats) >= 0 && S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR))
+			if(service_permTest(path, SERVICE_PERMS_READ_TEST) && service_statTest(path, S_IFMT, S_IFDIR))
 			{
 				strcpy(a_currPath, path);
 			}
@@ -300,14 +299,14 @@ String service_readDir(const String a_path, int *ap_length)
 	return buf;
 }
 
-Boolean service_writeFile(const String a_path, const String a_data, const int a_length, const int a_mode)
+Boolean service_writeFile(const String a_path, const String a_data, const int a_length)
 {
-	int fileFd;
+	FILE* p_fileFd;
 	Boolean result = false;
 	
-	if((fileFd = creat(a_path, a_mode)) >= 0)
+	if((p_fileFd = fopen(a_path, "wb")))
 	{
-		if(write(fileFd, a_data, a_length) != a_length)
+		if(fwrite(a_data, sizeof(char), a_length, p_fileFd) != a_length)
 		{
 			result = true;
 			
@@ -318,7 +317,7 @@ Boolean service_writeFile(const String a_path, const String a_data, const int a_
 		else
 			perror("service_writeFile()");
 		
-		close(fileFd);
+		fclose(p_fileFd);
 	}
 	else
 		perror("service_writeFile()");
@@ -326,14 +325,14 @@ Boolean service_writeFile(const String a_path, const String a_data, const int a_
 	return result;
 }
 
-Boolean service_permTest(const String a_path, const int a_mode)
+Boolean service_permTest(const String a_path, const String a_mode)
 {
-	int fd;
+	FILE *p_fileFd;
 	Boolean result = false;
 	
-	if((fd = open(a_path, a_mode)) != -1)
+	if((p_fileFd = fopen(a_path, a_mode)))
 	{
-		close(fd);
+		fclose(p_fileFd);
 		result = true;
 	}
 	
