@@ -38,11 +38,10 @@
 		#define SIFTP_VERBS_DATA_STREAM	"DSTR"
 		#define SIFTP_VERBS_DATA_END	"DEND"
 		
-		
-		#define SIFTP_SERIALIZED_FLAG	0x10
-		#define SIFTP_SERIALIZED_MESSAGE_SIZE	256
-		#define SIFTP_SERIALIZED_VERB_SIZE	4
-		#define SIFTP_SERIALIZED_PARAMETER_SIZE	( SIFTP_SERIALIZED_MESSAGE_SIZE - SIFTP_SERIALIZED_VERB_SIZE - 2 ) /* -2 for the bounding flags */
+		#define SIFTP_FLAG	0x10
+		#define SIFTP_MESSAGE_SIZE	256
+		#define SIFTP_VERB_SIZE	4
+		#define SIFTP_PARAMETER_SIZE	( SIFTP_MESSAGE_SIZE - SIFTP_VERB_SIZE )
 
 	/* typedefs */
 	
@@ -54,7 +53,7 @@
 	
 		struct TAG_Message
 		{
-			String m_verb, m_param; /* the payload */
+			char m_verb[SIFTP_VERB_SIZE], m_param[SIFTP_PARAMETER_SIZE]; /* the payload */
 		};
 		
 	/* constructors */
@@ -86,13 +85,17 @@
 		
 		/**
 		 * Serializes a Message object for network transport.
+		 * @param	ap_msg		Object to serialze
+		 * @param	a_result	Storage (minimum size = SIFTP_MESSAGE_SIZE) where the resulting serialized string will be placed
 		 */
-		String siftp_serialize(const Message *ap_msg);
+		Boolean siftp_serialize(const Message *ap_msg, String a_result);
 		
 		/**
 		 * Deserializes a Message object from network transport.
+		 * @param	a_str		String to deserialize
+		 * @param	ap_result	Storage where resulting deserialized object will be placed
 		 */
-		Message* siftp_deserialize(const String a_str);
+		Boolean siftp_deserialize(const String a_str, Message *ap_result);
 		
 		/**
 		 * Performs a simple query/response dialogue.
