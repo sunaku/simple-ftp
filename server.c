@@ -1,0 +1,216 @@
+/**
+ * Suraj Kurapati <skurapat@ucsc.edu>
+ * CMPS-150, Spring04, final project
+ *
+ * SimpleFTP server implementation.
+**/
+
+#include "client.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
+// globals
+	char g_pwd[PATH_MAX+1];
+
+// funcs
+int main(int a_argc, char **ap_argv)
+{
+	// variables
+		int serverSocket, clientSocket, clientSocketSize;
+		struct sockaddr_in clientAddr;
+		
+	// check args
+		if(a_argc < 3)
+		{
+			printf("Usage: %s dir_name port_number\n", ap_argv[0]);
+			return 1;
+		}
+		
+	// init vars
+		realpath(ap_argv[1], g_pwd);
+		
+	// create service
+		if(!service_create(&serverSocket, ap_argv[2]))
+		{
+			fprintf(stderr, "%s: unable to create service on port: %s\n", ap_argv[0], ap_argv[2]);
+			return 2;
+		}
+	
+	// dispatcher loop
+		while(1)
+		{
+			// wait for a client
+				clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &clientSocketSize);
+			
+			// dispatch job
+				if(fork() == 0) // child code
+				{
+					// service the client
+						if(session_create(clientSocket))
+						{
+							service_loop(clientSocket);
+							session_destroy(clientSocket);
+						}
+						
+					close(clientSocket);
+					return 0;
+				}
+		}
+		
+	// destroy service
+		close(serverSocket);
+
+	return 0;
+}
+
+Boolean service_create(int *ap_socket, struct sockaddr_in *ap_addr, const String a_port)
+{
+	// variables
+		
+	// create address
+		ap_addr->sin_family = htonl(AF_INET);
+		ap_addr->sin_addr.s_addr = htonl(INADDR_ANY);
+		ap_addr->sin_port = htons(strtol(a_port, (char**)NULL, 10));
+		memset(&(ap_addr.sin_zero), '\0', 8);  // zero the rest of the struct
+		
+	// create socket
+		if((*ap_socket = socket(ap_addr->sin_family, SOCK_STREAM, 0)) < 0)
+		{
+			perror("service_create");
+			return false;
+		}
+	
+	// bind socket
+		if(bind(*ap_socket, (struct sockaddr *)ap_addr, sizeof(struct sockaddr)) < 0)
+		{
+			perror("service_create");
+			close(*ap_socket);
+			return false;
+		}
+		
+	// listen to socket
+		if(listen(*ap_socket, SERVER_SOCKET_BACKLOG) < 0)
+		{
+			perror("service_create");
+			close(*ap_socket);
+			return false;
+		}
+	
+	return true;
+}
+
+Boolean session_create(const int a_socket)
+{
+	// variables
+		Message msgOut, msgIn;
+		
+	// session challenge dialogue
+	
+		// client: greeting
+			if(!siftp_recv(a_socket, &msgIn) || msgIn.m_verb != SIFTP_VERBS_SESSION_BEGIN)
+			{
+				fprintf(stderr, "service_create(): session not requested by client.\n");
+				return false;
+			}
+			
+		// server: identify
+		// CLIENT: username
+			strcpy(msgOut.m_verb, SIFTP_VERBS_IDENTIFY);
+			
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_USERNAME)
+			{
+				fprintf(stderr, "service_create(): username not specified by client.\n");
+				return false;
+			}
+			
+			//XXX check username... not required for this lab
+		
+		// SERVER: accept|deny
+		// CLIENT: password
+			strcpy(msgOut.m_verb, SIFTP_VERBS_ACCEPTED);
+			
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_PASSWORD)
+			{
+				fprintf(stderr, "service_create(): password not specified by client.\n");
+				return false;
+			}
+		
+		// SERVER: accept|deny
+			if(msgIn.m_param == SERVER_PASSWORD)
+			{
+				strcpy(msgOut.m_verb, SIFTP_VERBS_ACCEPTED);
+				siftp_send(a_socket, &msgOut);
+			}
+			else
+			{
+				strcpy(msgOut.m_verb, SIFTP_VERBS_DENIED);
+				siftp_send(a_socket, &msgOut);
+				
+				fprintf(stderr, "service_create(): client password rejected.\n");
+				return false;
+			}
+		
+		// session now established
+		
+	return true;
+}
+
+Boolean session_destroy(const int a_socket)
+{
+	// variables
+		Message msgOut;
+		
+	// send notice
+		strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_END);
+		return siftp_send(a_socket, &msgOut);
+}
+
+void service_loop(const int a_socket)
+{
+	Message msg;
+	Boolean status;
+	char cmd[SERVER_COMMAND_SIZE];
+	
+	while(1)
+	{
+		// await request
+			siftp_recv(a_socket, &msg);
+			
+		// parse request
+			strncpy(cmd, msg.m_param, SERVER_COMMAND_SIZE);
+			
+		// handle request
+			if(strstr(cmd, "ls"))
+				status = cmd_ls(a_socket, &msg.m_param);
+			
+			else if(strstr(cmd, "pwd"))
+				status = cmd_pwd(a_socket, &msg.m_param);
+			
+			else if(strstr(cmd, "cd"))
+				status = cmd_cd(a_socket, &msg.m_param);
+			
+			else if(strstr(cmd, "get"))
+				status = cmd_get(a_socket, &msg.m_param);
+			
+			else if(strstr(cmd, "put"))
+				status = cmd_put(a_socket, &msg.m_param);
+			
+			else // unknown request
+			{
+				strcpy(msg.m_verb, SIFTP_VERBS_COMMAND_STATUS);
+				msg.m_param[0] = false;
+				
+				siftp_send(a_socket, &msg);
+			}
+	}
+}
