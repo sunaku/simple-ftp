@@ -170,7 +170,7 @@ void service_loop(const int a_socket)
 {
 	// variables
 		char buf[SIFTP_MESSAGE_SIZE+1];
-		Boolean isLocal, status, isLooping = true;
+		Boolean status, isLooping = true;
 		String bufCR;
 		
 	while(isLooping)
@@ -184,8 +184,9 @@ void service_loop(const int a_socket)
 			if((bufCR = strrchr(buf, '\n')) != NULL)
 				*bufCR = '\0';
 			
-		// parse input
-			isLocal = (buf[0] == 'l') && (buf[1] != 's');
+			#ifndef NODEBUG
+				printf("service_loop(): got command {str='%s',arg='%s'}\n", buf, strchr(buf, ' '));
+			#endif
 			
 		// handle commands
 			status = true;
@@ -232,7 +233,7 @@ Boolean service_command(const int a_socket, const String a_cmdStr)
 		
 		DIR *p_dirFd;
 		struct dirent *p_dirInfo;
-		struct stat fileStats;
+		
 		
 	// init variables
 		Message_clear(&msgOut);
@@ -242,7 +243,10 @@ Boolean service_command(const int a_socket, const String a_cmdStr)
 			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
 			cmdName[MODEL_COMMAND_SIZE] = '\0';
 		
-		cmdArg = strchr(a_cmdStr, ' '); // argument string
+		// argument string
+			if((cmdArg = strchr(a_cmdStr, ' ')) != NULL)
+				cmdArg += sizeof(char);
+		
 		cmdStatus = true;
 	
 	if(strstr(cmdName, "lls"))
@@ -268,15 +272,7 @@ Boolean service_command(const int a_socket, const String a_cmdStr)
 	
 	else if(strstr(cmdName, "lcd"))
 	{
-		if(stat(cmdArg, &fileStats) == 0 && S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR)) // check perms of wanted path
-		{
-			realpath(cmdArg, g_pwd);
-		}
-		else
-		{
-			perror(a_cmdStr);
-			cmdStatus = false;
-		}
+		cmdStatus = service_command_chdir(a_cmdStr, cmdArg, g_pwd);
 	}
 	
 	else if(strstr(cmdName, "ls") || strstr(cmdName, "pwd") || strstr(cmdName, "cd"))

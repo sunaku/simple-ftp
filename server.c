@@ -58,8 +58,8 @@ int main(int a_argc, char **ap_argv)
 				#endif
 				
 			// dispatch job
-				if(fork() == 0) // child code
-				{
+	//			if(fork() == 0) // child code
+	//			{
 					// service the client
 						if(session_create(clientSocket))
 							service_loop(clientSocket);
@@ -69,7 +69,7 @@ int main(int a_argc, char **ap_argv)
 					// finished with client
 						close(clientSocket);
 						return 0;
-				}
+	//			}
 		}
 		
 	// destroy service
@@ -226,7 +226,6 @@ Boolean service_command(const int a_socket, const String a_cmdStr)
 		
 		DIR *p_dirFd;
 		struct dirent *p_dirInfo;
-		struct stat fileStats;
 		
 	// init variables
 		Message_clear(&msgOut);
@@ -323,34 +322,7 @@ Boolean service_command(const int a_socket, const String a_cmdStr)
 	
 	else if(strstr(cmdName, "cd"))
 	{
-		int tempLen;
-		char tempPath[PATH_MAX+1];
-		memset(&tempPath, 0, sizeof(tempPath));
-		
-		// validate command
-			
-			// assemble absolute path from arg
-				if(cmdArg[0] == '/')
-					strcpy(tempPath, cmdArg);
-				else
-				{
-					strcpy(tempPath, g_pwd);
-					
-					// append arg to current path
-						if((tempLen = strlen(g_pwd)) + strlen(cmdArg) < sizeof(tempPath))
-							strcpy(&tempPath[tempLen], cmdArg);
-				}
-		
-			// change path
-				if(realpath(cmdArg, tempPath) != NULL && stat(tempPath, &fileStats) == 0 && S_ISDIR(fileStats.st_mode))
-				{
-					strncpy(g_pwd, tempPath, sizeof(tempPath));
-				}
-				else
-				{
-					perror(a_cmdStr);
-					cmdStatus = false;
-				}
+		cmdStatus = service_command_chdir(a_cmdStr, cmdArg, g_pwd);
 		
 		// send status notification
 			Message_setType(&msgOut, SIFTP_VERBS_COMMAND_STATUS);
