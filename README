@@ -76,7 +76,19 @@ SPECIFICATION:
 		
 	Message format.
 	
-		A message consists of a 'Verb' and a 'Parameter'. The Verb specifies the subject, action, or intent of the message. The Parameter specifies information pertaining to the Verb. For a full list of Verbs and their use of the Parameter field, see file 'siftp.h'.
+		A message consists of a 'Verb' and a 'Parameter' (see Figure 1). The Verb specifies the subject, action, or intent of the message. The Parameter specifies information pertaining to the Verb. For a full list of Verbs and their use of the Parameter field, see file 'siftp.h'.
+		
+			~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			 _____________________________________________
+			| VERB           | PARAMETER                  |
+			|________________|____________________________|
+			
+			|<------------- 1024 bytes ------------------>|
+			
+			|<- 4 bytes ---->|<--------- 1020 bytes ----->|
+			
+			~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			Figure 1. The message format. Note that these sizes are defined in the file <siftp.h> and can be changed.
 		
 		When sent over the network, the message is serialized into a string of contiguous bytes. The format of the serialized message is: the Verb followed by the Parameter. The sizes of these fields are defined in 'siftp.h'.
 	
@@ -128,11 +140,13 @@ KNOWN PROBLEMS:
 	
 COMMENTS:
 
+	Caveat: although I use the layer terminology of the OSI network model in describing the components of this program, they all really belong to OSI application layer.
+
 	I have some network programming experience in Java, but this was the first time I worked on a network programming project in C.
 	
-	I originally planned to use the frame transmission strategies (using flags to delimit start and end of a frame) [1]. However, I chose later on to use a fixed length message model because it was easier to implement.
+	I originally planned to use the frame transmission strategies of using flags to delimit start and end of a frame [1], for performing Message transmissions. This model allows the transport layer to take care of breaking, say, a huge data file, into IP packets. However, I chose later on to use a fixed length message model, where this application took on the role of splitting, say, a huge data file into discrete Messages because it was easier to implement.
 	
-	I relied heavily on [2] for socket initialization in both server and client programs.
+	I relied heavily on [2] for socket initialization in both server and client programs, as I was unfamiliar with BSD sockets.
 	
 REFERENCES (MLA citation format):
 
