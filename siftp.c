@@ -193,7 +193,7 @@
 		{
 			// variables
 				Message msgOut;
-				int tempLen;
+				int tempLen, copySize;
 				
 			// init vars
 				memset(&msgOut, 0, sizeof(msgOut));
@@ -215,7 +215,10 @@
 				for(tempLen = 0; tempLen < a_length; tempLen += SIFTP_PARAMETER_SIZE)
 				{
 					memset(&msgOut.m_param, 0, sizeof(msgOut.m_param));
-					strncpy(msgOut.m_param, &a_data[tempLen], SIFTP_PARAMETER_SIZE);
+					
+					copySize = a_length - tempLen;
+					
+					strncpy(msgOut.m_param, &a_data[tempLen], (copySize < SIFTP_PARAMETER_SIZE) ? copySize : SIFTP_PARAMETER_SIZE);
 					
 					if(!siftp_send(a_socket, &msgOut))
 						return false;
