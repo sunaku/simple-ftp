@@ -164,11 +164,11 @@
 					return false;
 				}
 				
-			if(send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) >= 0)
+			if(send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) != -1)
 				return true;
 			else
 			{
-				fprintf(stderr, "siftp_send(): send() failed.\n");
+				perror("siftp_send()");
 				return false;
 			}
 		}
@@ -178,11 +178,11 @@
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
 				
-			if(recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) >= 0)
+			if(recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) != -1)
 				return siftp_deserialize(buf, ap_response);
 			else
 			{
-				fprintf(stderr, "siftp_recv(): recv() failed.\n");
+				perror("siftp_recv()");
 				return false;
 			}
 		}
@@ -202,22 +202,22 @@
 				
 			if(a_length <= SIFTP_PARAMETER_SIZE) // send as "datagram"
 			{
-				strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_GRAM);
-				strcpy(msgOut.m_param, a_data);
+				Message_setType(&msgOut, SIFTP_VERBS_DATA_GRAM);
+				Message_setValue(&msgOut, a_data);
 				return siftp_send(a_socket, &msgOut);
 			
 			}
 			else // send as data stream
 			{
 				// header
-					strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_STREAM_HEADER);
+					Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_HEADER);
 					sprintf(msgOut.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, a_length);
 					
 					if(!siftp_send(a_socket, &msgOut))
 						return false;
 				
 				// send data as discrete messages
-					strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_STREAM_PAYLOAD);
+					Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_PAYLOAD);
 					
 					for(tempLen=0; tempLen < a_length; tempLen += SIFTP_PARAMETER_SIZE)
 					{
@@ -229,7 +229,8 @@
 					}
 				
 				// tailer
-					strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_STREAM_TAILER);
+					Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_TAILER);
+					Message_setValue(&msgOut, "");
 					return siftp_send(a_socket, &msgOut);
 			}
 		}
@@ -315,11 +316,8 @@
 								{
 									fprintf(stderr, "siftp_recvData(): transfer aborted by remote host.\n");
 									
-									// clean up
-										free(buf);
-										buf = NULL;
-										
-									break;
+									free(buf);
+									return NULL;
 								}
 						}
 						while(!Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_TAILER));
