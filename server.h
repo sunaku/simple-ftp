@@ -15,7 +15,7 @@
 	/* constants */
 	
 		#define SERVER_SOCKET_BACKLOG	5
-		#define SERVER_PASSWORD	"a"
+		#define SERVER_PASSWORD	"ce150"
 	
 	/* typedefs */
 	
