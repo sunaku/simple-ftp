@@ -258,6 +258,8 @@
 					// allocate space
 						if((buf = calloc(*ap_length+1,  sizeof(char))) == NULL)
 						{
+							*ap_length=0;
+							
 							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
 							return NULL;
 						}
@@ -279,7 +281,9 @@
 						
 						if((buf = calloc(*ap_length+1, sizeof(char))) == NULL)
 						{
-							// cancel transmission
+							// XXX not implemented: "client: cancel transmission"
+							
+							*ap_length=0;
 							
 							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
 							return NULL;
@@ -293,6 +297,8 @@
 							// read stream
 								if(!siftp_recv(a_socket, &msgIn))
 								{
+									*ap_length=0;
+									
 									free(buf);
 									return NULL;
 								}
@@ -317,6 +323,8 @@
 								else if(Message_hasType(&msgIn, SIFTP_VERBS_ABORT)) // transfer aborted
 								{
 									fprintf(stderr, "siftp_recvData(): transfer aborted by remote host.\n");
+									
+									*ap_length=0;
 									
 									free(buf);
 									return NULL;
