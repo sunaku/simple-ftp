@@ -158,6 +158,7 @@
 		{
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
+				int total = 0, n;
 				
 			// serialize message
 				if(!siftp_serialize(ap_query, buf))
@@ -166,27 +167,49 @@
 					return false;
 				}
 				
-			if(send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) != -1)
-				return true;
-			else
+			// handle partial transmissions
+			while(total < SIFTP_MESSAGE_SIZE)
 			{
-				perror("siftp_send()");
-				return false;
+				if((n = send(a_socket, buf + total, SIFTP_MESSAGE_SIZE - total, 0)) == -1)
+				{
+					perror("siftp_send()");
+					return false;
+				}
+				
+				total += n;
+				
+				#ifndef NODEBUG
+					printf("siftp_send(): bytes sent=%d, remaining=%d\n", total, SIFTP_MESSAGE_SIZE - total);
+				#endif
 			}
+			
+			return true;
 		}
 		
 		Boolean siftp_recv(const int a_socket, Message *ap_response)
 		{
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
-				
-			if(recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) != -1)
-				return siftp_deserialize(buf, ap_response);
-			else
+				int total = 0, n;
+			
+			// handle partial transmissions
+			while(total < SIFTP_MESSAGE_SIZE)
 			{
-				perror("siftp_recv()");
-				return false;
+				if((n = recv(a_socket, buf + total, SIFTP_MESSAGE_SIZE - total, 0)) == -1) // XXX same code copied into siftp_send()
+				{
+					perror("siftp_recv()");
+					return false;
+				}
+				
+				total += n;
+				
+				#ifndef NODEBUG
+					printf("siftp_recv(): bytes recv=%d, remaining=%d\n", total, SIFTP_MESSAGE_SIZE - total);
+					printf("siftp_recv(): buffer='%s'\n", buf);
+				#endif
 			}
+			
+			return siftp_deserialize(buf, ap_response);
 		}
 		
 		Boolean siftp_sendData(const int a_socket, const String a_data, const int a_length)
