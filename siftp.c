@@ -6,15 +6,17 @@
 **/
 
 #include "siftp.h"
+
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <unistd.h>
-#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 // constants
 
@@ -254,7 +256,7 @@
 					*ap_length = strlen(msgIn.m_param);
 					
 					// allocate space
-						if((buf = calloc(++*ap_length,  sizeof(char))) == NULL) // +1 for null term
+						if((buf = calloc(*ap_length+1,  sizeof(char))) == NULL)
 						{
 							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
 							return NULL;
@@ -275,7 +277,7 @@
 							printf("siftp_recvData(): data length = %d\n", *ap_length);
 						#endif
 						
-						if((buf = calloc(++*ap_length, sizeof(char))) == NULL) // +1 for null term
+						if((buf = calloc(*ap_length+1, sizeof(char))) == NULL)
 						{
 							// cancel transmission
 							
