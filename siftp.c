@@ -232,7 +232,7 @@
 			// variables
 				Message msgIn;
 				String buf = NULL;
-				int tempLen;
+				int tempLen, copySize;
 				
 			// init
 				memset(&msgIn, 0, sizeof(msgIn));
@@ -282,7 +282,19 @@
 								if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_PAYLOAD))
 								{
 									if(tempLen < *ap_length)
-										strncpy(&buf[tempLen], msgIn.m_param, SIFTP_PARAMETER_SIZE);
+									{
+										// the amount of data in the current message
+										copySize = *ap_length - tempLen;
+										
+										/**
+										 * XXX Very hard to find BUG:
+										 * Assume messages 1 to N are sent by server.
+										 * We recieve N-1 messages with the whole parameter field used up.
+										 * In the Nth message, there can only be <= MAX_parameter_size amount of data in the parameter field.
+										 * The previous buggy code ignored this and just copied MAX_parameter_size of data regardless of how much actual data was in the Message; thus we had nasty memory leaks.
+										*/
+										strncpy(&buf[tempLen], msgIn.m_param, (copySize > SIFTP_PARAMETER_SIZE) ? SIFTP_PARAMETER_SIZE : copySize);
+									}
 									else
 									{
 										fprintf(stderr, "siftp_recvData(): receiving more data than expected; ignoring excess data.\n");
