@@ -301,7 +301,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 		if(service_getAbsolutePath(g_pwd, ap_argv[1], srcPath))
 		{
 			// check read perms & file type
-			if(service_permTest(srcPath, SERVICE_FILE_PERMS_READTEST) && service_statTest(srcPath, S_IFMT, S_IFREG))
+			if(service_permTest(srcPath, SERVICE_PERMS_READ_TEST) && service_statTest(srcPath, S_IFMT, S_IFREG))
 			{
 				// read file
 				if((dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
@@ -337,7 +337,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 		if(service_getAbsolutePath(g_pwd, ap_argv[1], dstPath))
 		{
 			// check write perms & file type
-			if(service_permTest(dstPath, SERVICE_FILE_PERMS_WRITETEST) && service_statTest(dstPath, S_IFMT, S_IFREG))
+			if(service_permTest(dstPath, SERVICE_PERMS_WRITE_TEST) && service_statTest(dstPath, S_IFMT, S_IFREG))
 			{
 				// send primary ack: file perms OK
 				if(service_sendStatus(a_socket, true))
@@ -345,7 +345,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 					// receive file
 					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
 					{
-						tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen, SERVICE_FILE_PERMS);
+						tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen);
 						
 						free(dataBuf);
 						
