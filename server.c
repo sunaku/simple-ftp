@@ -16,6 +16,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -26,11 +28,18 @@
 	char g_pwd[PATH_MAX+1];
 
 // funcs
+
+void sigchld_handler(int s)
+{
+	while(wait(NULL) > 0);
+}
+
 int main(int a_argc, char **ap_argv)
 {
 	// variables
 		int serverSocket, clientSocket, clientAddrSize;
 		struct sockaddr_in clientAddr;
+		struct sigaction signalAction;
 		
 	// check args
 		if(a_argc < 3)
@@ -48,7 +57,18 @@ int main(int a_argc, char **ap_argv)
 			fprintf(stderr, "%s: unable to create service on port: %s\n", ap_argv[0], ap_argv[2]);
 			return 2;
 		}
-	
+		
+	// setup termination handler
+		signalAction.sa_handler = sigchld_handler; // reap all dead processes
+		sigemptyset(&signalAction.sa_mask);
+		signalAction.sa_flags = SA_RESTART;
+		
+		if (sigaction(SIGCHLD, &signalAction, NULL) == -1)
+		{
+			perror("main(): sigaction");
+			return 3;
+		}
+		
 	// dispatcher loop
 		while(true)
 		{
@@ -64,6 +84,8 @@ int main(int a_argc, char **ap_argv)
 				// dispatch job
 					if(fork() == 0) // child code
 					{
+						close(serverSocket); // child doesn't need this socket
+						
 						// service the client
 							if(session_create(clientSocket))
 								service_loop(clientSocket);
@@ -74,6 +96,8 @@ int main(int a_argc, char **ap_argv)
 							close(clientSocket);
 							return 0;
 					}
+					
+					close(clientSocket); // parent doesn't need this socket
 				}
 				else
 					perror("main()");
