@@ -48,7 +48,7 @@ int main(int a_argc, char **ap_argv)
 	// establish session
 		if(!session_create(socket))
 		{
-			link_destroy(&socket);
+			close(socket);
 			
 			fprintf(stderr, "%s: unable to establish session\n", ap_argv[0]);
 			return 3;
@@ -61,7 +61,7 @@ int main(int a_argc, char **ap_argv)
 		session_destroy(socket);
 		
 	// destroy link
-		link_destroy(&socket);
+		close(socket);
 		
 	return 0;
 }
@@ -90,7 +90,6 @@ Boolean link_create(int *ap_socket, const String a_serverName, const String a_se
 		
 		serverAddr.sin_family = htonl(p_serverInfo->h_addrtype);
 		serverAddr.sin_port = htons(strtol(a_serverPort, (char**)NULL, 10));
-		memset(&(serverAddr.sin_zero), '\0', 8);  // zero the rest of the struct
 		
 	// create socket
 		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
@@ -185,14 +184,19 @@ void input_loop(const int a_socket)
 		// handle commands
 			if(strstr(cmd, "ls"))
 				status = cmd_ls(a_socket, isLocal, buf);
+
 			else if(strstr(cmd, "pwd"))
 				status = cmd_pwd(a_socket, isLocal, buf);
-			else if(strstr(cmd, "cd"))
+
+/*			else if(strstr(cmd, "cd"))
 				status = cmd_cd(a_socket, isLocal, buf);
+
 			else if(strstr(cmd, "get"))
 				status = cmd_get(a_socket, isLocal, buf);
+
 			else if(strstr(cmd, "put"))
 				status = cmd_put(a_socket, isLocal, buf);
+*/
 			else if(strstr(cmd, "help"))
 			{
 				status = true;
@@ -208,8 +212,10 @@ void input_loop(const int a_socket)
 				printf("help\t-displays this message.\n");
 				printf("exit\t-leaves this program.\n");
 			}
+
 			else if(strstr(cmd, "exit"))
 				break;
+
 			else
 			{
 				status = false;
