@@ -8,19 +8,19 @@
 #include "service.h"
 #include "server.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-
 #include <unistd.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <dirent.h>
 #include <errno.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 // globals
 	char g_pwd[PATH_MAX+1];
@@ -29,7 +29,7 @@
 int main(int a_argc, char **ap_argv)
 {
 	// variables
-		int serverSocket, clientSocket, clientSocketSize;
+		int serverSocket, clientSocket, clientAddrSize;
 		struct sockaddr_in clientAddr;
 		
 	// check args
@@ -43,35 +43,40 @@ int main(int a_argc, char **ap_argv)
 		realpath(ap_argv[1], g_pwd);
 		
 	// create service
-		if(!service_create(&serverSocket, ap_argv[2]))
+		if(!service_create(&serverSocket, strtol(ap_argv[2], (char**)NULL, 10)))
 		{
 			fprintf(stderr, "%s: unable to create service on port: %s\n", ap_argv[0], ap_argv[2]);
 			return 2;
 		}
 	
 	// dispatcher loop
-		while(1)
+		while(true)
 		{
-			// wait for a client
-				clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &clientSocketSize);
+			clientAddrSize = sizeof(clientAddr);
 			
-				#ifndef NODEBUG
-					printf("\nmain(): got client connection [addr=%x,port=%d]\n", ntohl(clientAddr.sin_addr.s_addr), ntohs(clientAddr.sin_port));
-				#endif
-				
-			// dispatch job
-	//			if(fork() == 0) // child code
-	//			{
-					// service the client
-						if(session_create(clientSocket))
-							service_loop(clientSocket);
-						
-						session_destroy(clientSocket);
+			// wait for a client
+				if((clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &clientAddrSize)) != -1)
+				{
+					#ifndef NODEBUG
+						printf("\nmain(): got client connection [addr=%s,port=%d]\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
+					#endif
 					
-					// finished with client
-						close(clientSocket);
-						return 0;
-	//			}
+				// dispatch job
+		//			if(fork() == 0) // child code
+		//			{
+						// service the client
+							if(session_create(clientSocket))
+								service_loop(clientSocket);
+							
+							session_destroy(clientSocket);
+						
+						// finished with client
+							close(clientSocket);
+							return 0;
+		//			}
+				}
+				else
+					perror("main()");
 		}
 		
 	// destroy service
@@ -80,27 +85,36 @@ int main(int a_argc, char **ap_argv)
 	return 0;
 }
 
-Boolean service_create(int *ap_socket, const String a_port)
+Boolean service_create(int *ap_socket, const int a_port)
 {
 	// variables
 		struct sockaddr_in serverAddr;
+		int yes=1;
 		
 	// create address
+		memset(&serverAddr, 0, sizeof(serverAddr));
 		serverAddr.sin_family = AF_INET;
 		serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-		serverAddr.sin_port = htons(strtol(a_port, (char**)NULL, 10));
+		serverAddr.sin_port = htons(a_port);
 		
 	// create socket
 		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
 		{
-			perror("service_create()");
+			perror("service_create(): create socket");
+			return false;
+		}
+		
+	// set options
+		if(setsockopt(*ap_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
+		{
+			perror("service_create(): socket opts");
 			return false;
 		}
 	
 	// bind socket
-		if(bind(*ap_socket, (struct sockaddr *)&serverAddr, sizeof(struct sockaddr)) < 0)
+		if(bind(*ap_socket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
 		{
-			perror("service_create()");
+			perror("service_create(): bind socket");
 			close(*ap_socket);
 			return false;
 		}
@@ -108,7 +122,7 @@ Boolean service_create(int *ap_socket, const String a_port)
 	// listen to socket
 		if(listen(*ap_socket, SERVER_SOCKET_BACKLOG) < 0)
 		{
-			perror("service_create()");
+			perror("service_create(): listen socket");
 			close(*ap_socket);
 			return false;
 		}
@@ -196,7 +210,7 @@ void service_loop(const int a_socket)
 		else
 		{
 			#ifndef NODEBUG
-				printf("service_loop(): got command {str='%s',arg='%s'}\n", Message_getValue(&msg), strchr(Message_getValue(&msg), ' '));
+				printf("service_loop(): got command '%s'\n", Message_getValue(&msg));
 			#endif
 			
 			// parse request
@@ -243,7 +257,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 		String dataBuf;
 		int dataBufLen;
 		
-		Boolean tempStatus;
+		Boolean tempStatus = false;
 		
 	// init variables
 		Message_clear(&msg);
@@ -283,23 +297,34 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 	{
 		char srcPath[PATH_MAX+1];
 		
-		// init vars
-			tempStatus = false;
-		
-		// send source file
-			if(service_getAbsolutePath(g_pwd, ap_argv[1], srcPath) && (dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
+		// determine absolute path
+		if(service_getAbsolutePath(g_pwd, ap_argv[1], srcPath))
+		{
+			// check read perms & file type
+			if(service_permTest(srcPath, "r") && service_statTest(srcPath, S_IFMT, S_IFREG))
 			{
-				if(service_sendStatus(a_socket, true))
+				// read file
+				if((dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
 				{
-					tempStatus = siftp_sendData(a_socket, dataBuf, dataBufLen);
+					if(service_sendStatus(a_socket, true))
+					{
+						// send file
+						tempStatus = siftp_sendData(a_socket, dataBuf, dataBufLen);
+						
+						#ifndef NODEBUG 
+							printf("get(): sent file '%s'.\n", srcPath);
+						#endif
+					}
 					
-					#ifndef NODEBUG 
-						printf("get(): sent file '%s'.\n", srcPath);
-					#endif
+					free(dataBuf);
 				}
-				
-				free(dataBuf);
 			}
+		}
+		
+		
+		#ifndef NODEBUG
+			perror("get()");
+		#endif
 			
 		return tempStatus;
 	}
@@ -307,13 +332,12 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 	else if(strcmp(ap_argv[0], "put") == 0 && a_argc > 1)
 	{
 		char dstPath[PATH_MAX+1];
-		struct stat fileStats;
 		
 		// determine destination file path
 		if(service_getAbsolutePath(g_pwd, ap_argv[1], dstPath))
 		{
-			// check write perms
-			if((stat(dstPath, &fileStats) >= 0 && !S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IWUSR)) || errno == ENOENT)
+			// check write perms & file type
+			if(service_permTest(dstPath, "a") && service_statTest(dstPath, S_IFMT, S_IFREG))
 			{
 				// send primary ack: file perms OK
 				if(service_sendStatus(a_socket, true))
@@ -321,7 +345,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 					// receive file
 					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
 					{
-						tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen-1, SERVICE_FILE_PERMS);
+						tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen, SERVICE_FILE_PERMS);
 						
 						free(dataBuf);
 						
@@ -335,9 +359,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 			}
 			
 			#ifndef NODEBUG
-				int e = errno;
 				perror("put()");
-				printf("put(): errno=%d\n", e);
 			#endif
 		}
 	}
