@@ -33,19 +33,13 @@
 		/**
 		 * Destroys an established SimpleFTP session.
 		 */
-		Boolean session_destroy(const int a_socket);
+		inline Boolean session_destroy(const int a_socket);
 		
 		/**
 		 * Establishes a network connection with the specified server.
 		 * @param	ap_socket		Storage for socket descriptor.
 		 */
 		Boolean link_create(int *ap_socket, const String a_serverName, const String a_serverPort);
-		
-		/**
-		 * Closes an established network connection.
-		 * @param	ap_socket		Storage for socket descriptor.
-		 */
-		Boolean link_destroy(int *ap_socket);
 		
 		/**
 		 * Performs user interaction.

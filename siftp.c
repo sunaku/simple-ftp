@@ -43,14 +43,16 @@
 		return p_msg;
 	}
 	
-	void Message_destroy(Message *ap_msg)
+	inline void Message_destroy(Message *ap_msg)
 	{
-		// check args
-			if(ap_msg == NULL)
-				return;
-		
-		// destroy obj
+		if(ap_msg != NULL)
 			free(ap_msg);
+	}
+	
+	inline void Message_init(Message *ap_msg)
+	{
+		memset(ap_msg->m_verb, 0, sizeof(ap_msg->m_verb));
+		memset(ap_msg->m_param, 0, sizeof(ap_msg->m_param));
 	}
 
 // utility functions
@@ -130,6 +132,10 @@
 				strncpy(a_result, ap_msg->m_verb, SIFTP_VERB_SIZE);
 				strncpy(&a_result[SIFTP_VERB_SIZE], ap_msg->m_param, SIFTP_PARAMETER_SIZE);
 				
+				#ifndef NODEBUG
+					printf("serialize(): result='%s'\n", a_result);
+				#endif
+				
 			return true;
 		}
 		
@@ -144,6 +150,10 @@
 			// parse serialized string
 				strncpy(ap_result->m_verb, a_str, SIFTP_VERB_SIZE);
 				strncpy(ap_result->m_param, &a_str[SIFTP_VERB_SIZE], SIFTP_PARAMETER_SIZE);
+				
+				#ifndef NODEBUG
+					printf("deserialize(): message [verb='%s',param='%s']\n", ap_result->m_verb, ap_result->m_param);
+				#endif
 				
 			return true;
 		}

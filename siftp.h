@@ -44,7 +44,7 @@
 		
 		// sizes
 			#define SIFTP_FLAG	0x10
-			#define SIFTP_MESSAGE_SIZE	256
+			#define SIFTP_MESSAGE_SIZE	128
 			#define SIFTP_VERB_SIZE	4
 			#define SIFTP_PARAMETER_SIZE	( SIFTP_MESSAGE_SIZE - SIFTP_VERB_SIZE )
 
@@ -58,7 +58,7 @@
 	
 		struct TAG_Message
 		{
-			char m_verb[SIFTP_VERB_SIZE], m_param[SIFTP_PARAMETER_SIZE]; /* the payload */
+			char m_verb[SIFTP_VERB_SIZE+1], m_param[SIFTP_PARAMETER_SIZE+1];
 		};
 		
 	/* constructors */
@@ -72,7 +72,13 @@
 		/**
 		 * Destroys a Message object.
 		 */
-		void Message_destroy(Message *ap_msg);
+		inline void Message_destroy(Message *ap_msg);
+		
+		/**
+		 * Null terminates member strings (character arrays).
+		 * @pre	ap_msg != NULL
+		 */
+		inline void Message_init(Message *ap_msg);
 		
 	/* utility functions */
 	

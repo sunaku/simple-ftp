@@ -77,31 +77,30 @@ Boolean link_create(int *ap_socket, const String a_serverName, const String a_se
 		// determine dotted quad str from DNS
 			if((p_serverInfo = gethostbyname(a_serverName)) == NULL)
 			{
-				herror("link_create");
+				herror("link_create()");
 				return false;
 			}
 			
-		// convert dotted quad str to numerical addr
-			if(inet_aton(p_serverInfo->h_addr, &serverAddr.sin_addr) == 0)
-			{
-				fprintf(stderr, "link_create(): inet_aton() failed.\n");
-				return false;
-			}
-		
-		serverAddr.sin_family = htonl(p_serverInfo->h_addrtype);
+			#ifndef NODEBUG
+				printf("link_create(): serverName='%s', serverAddr='%s'\n", a_serverName, inet_ntoa(*((struct in_addr *)p_serverInfo->h_addr)));
+			#endif
+			
+			serverAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr *)p_serverInfo->h_addr)));
+			
+		serverAddr.sin_family = AF_INET;
 		serverAddr.sin_port = htons(strtol(a_serverPort, (char**)NULL, 10));
 		
 	// create socket
 		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
 		{
-			perror("link_create");
+			perror("link_create()");
 			return false;
 		}
 	
 	// establish connection
 		if((connect(*ap_socket, (struct sockaddr *)&serverAddr, sizeof(struct sockaddr))) < 0)
 		{
-			perror("link_create");
+			perror("link_create()");
 			close(*ap_socket);
 			return false;
 		}
@@ -114,13 +113,18 @@ Boolean session_create(const int a_socket)
 	// variables
 		Message msgOut, msgIn;
 		
+	// init vars
+		Message_init(&msgOut);
+		Message_init(&msgIn);
+		
+		
 	// session challenge dialogue
 	
 		// c: greeting
 		// s: identify
 			strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_BEGIN);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_IDENTIFY)
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_IDENTIFY, SIFTP_VERB_SIZE))
 			{
 				fprintf(stderr, "session_create(): connection request rejected.\n");
 				return false;
@@ -130,7 +134,7 @@ Boolean session_create(const int a_socket)
 		// S: accept|deny
 			strcpy(msgOut.m_verb, SIFTP_VERBS_USERNAME);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_ACCEPTED)
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_ACCEPTED, SIFTP_VERB_SIZE))
 			{
 				fprintf(stderr, "session_create(): username rejected.\n");
 				return false;
@@ -145,7 +149,7 @@ Boolean session_create(const int a_socket)
 				printf("\npassword: ");
 				scanf("%s", msgOut.m_param);
 		
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_ACCEPTED)
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_ACCEPTED, SIFTP_VERB_SIZE))
 			{
 				fprintf(stderr, "session_create(): password rejected.\n");
 				return false;
@@ -156,10 +160,13 @@ Boolean session_create(const int a_socket)
 	return true;
 }
 
-Boolean session_destroy(const int a_socket)
+inline Boolean session_destroy(const int a_socket)
 {
 	// variables
 		Message msgOut;
+		
+	// init vars
+		Message_init(&msgOut);
 		
 	// send notice
 		strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_END);
@@ -236,13 +243,17 @@ Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_comma
 		String buf = NULL;
 		int bufLen, tempLen;
 		
+	// init vars
+		Message_init(&msgOut);
+		Message_init(&msgIn);
+		
 	// check domain
 		if(a_isLocal)
 		{
 			// open
 				if((p_dirFd = opendir(g_pwd)) == NULL)
 				{
-					perror("cmd_ls");
+					perror("cmd_ls()");
 					return false;
 				}
 
@@ -260,11 +271,11 @@ Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_comma
 				strcpy(msgOut.m_param, "ls");
 			
 			// query server
-				if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_COMMAND_STATUS || msgIn.m_param[0] == false)
+				if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_COMMAND_STATUS, SIFTP_VERB_SIZE) || msgIn.m_param[0] == false)
 					return false;
 			
 			// determine result size
-				if(!siftp_recv(a_socket, &msgIn) || msgIn.m_verb != SIFTP_VERBS_DATA_STREAM_HEADER)
+				if(!siftp_recv(a_socket, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_HEADER, SIFTP_VERB_SIZE))
 					return false;
 				
 				bufLen = strtol(msgIn.m_param, (char **)NULL, SIFTP_VERBS_DATA_STREAM_HEADER_NUMBASE) + 1; // +1 for null term
@@ -292,7 +303,8 @@ Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_comma
 						tempLen += SIFTP_PARAMETER_SIZE;
 					}
 				}
-				while(msgIn.m_verb != SIFTP_VERBS_DATA_STREAM_TAILER);
+				
+				while(strncmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_TAILER, SIFTP_VERB_SIZE));
 			
 			// print result
 				printf("%s", buf);
@@ -306,6 +318,10 @@ Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_comm
 	// variables
 		Message msgOut, msgIn;
 		
+	// init vars
+		Message_init(&msgOut);
+		Message_init(&msgIn);
+		
 	// check domain
 		if(a_isLocal)
 		{
@@ -318,11 +334,11 @@ Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_comm
 				strcpy(msgOut.m_param, "pwd");
 			
 			// query server
-				if(!siftp_query(a_socket, &msgOut, &msgIn) || msgIn.m_verb != SIFTP_VERBS_COMMAND_STATUS || msgIn.m_param[0] == false)
+				if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_COMMAND_STATUS, SIFTP_VERB_SIZE) || msgIn.m_param[0] == false)
 					return false;
 				
 			// get result
-				if(!siftp_recv(a_socket, &msgIn) || msgIn.m_verb != SIFTP_VERBS_DATA_GRAM)
+				if(!siftp_recv(a_socket, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_DATA_GRAM, SIFTP_VERB_SIZE))
 					return false;
 				
 			// print result

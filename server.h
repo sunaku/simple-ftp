@@ -35,7 +35,7 @@
 		/**
 		 * Destroys an established SimpleFTP session.
 		 */
-		Boolean session_destroy(const int a_socket);
+		inline Boolean session_destroy(const int a_socket);
 		
 		/**
 		 * Establishes a network service on the specified port.
