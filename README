@@ -7,6 +7,7 @@ CONTENTS:
 	files
 	instructions
 	specification
+	known problems
 	comments
 	references
 
@@ -47,7 +48,9 @@ INSTRUCTIONS:
 			myftp <server name or IP> <port number>
 		
 		Info:
-			Once connected to the server, the user will be presented with a password prompt. Once authorized, the user will be presented with an application prompt, at which the command 'help' can be issued for details on supported commands.
+			Once connected to the server, the user will be presented with a password prompt. The default password is "ce150".
+			
+			Once authorized, the user will be presented with an application prompt, at which the command 'help' can be issued for details on supported commands.
 			
 			
 	Using the SimpleFTP server.

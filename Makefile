@@ -1,7 +1,7 @@
 # compiler flags
 CC=gcc
 CFLAGS_SOLARIS=-lnsl -lsocket -lresolv -D_PLATFORM_SOLARIS
-CFLAGS=-Wall -g -O #$(CFLAGS_SOLARIS) #-DNODEBUG
+CFLAGS=-Wall -g -O $(CFLAGS_SOLARIS) -DNODEBUG
 
 # targets
 DEPS=siftp.o service.o
