@@ -5,6 +5,7 @@
  * SimpleFTP server implementation.
 **/
 
+#include "model.h"
 #include "server.h"
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -119,49 +120,47 @@ Boolean session_create(const int a_socket)
 		Message msgOut, msgIn;
 		
 	// init vars
-		Message_reset(&msgOut);
-		Message_reset(&msgIn);
+		Message_clear(&msgOut);
+		Message_clear(&msgIn);
 		
 	// session challenge dialogue
 	
 		// client: greeting
-			if(!siftp_recv(a_socket, &msgIn) || strcmp(msgIn.m_verb, SIFTP_VERBS_SESSION_BEGIN))
+			if(!siftp_recv(a_socket, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_SESSION_BEGIN))
 			{
 				fprintf(stderr, "service_create(): session not requested by client.\n");
 				return false;
 			}
 			
 		// server: identify
-		// CLIENT: username
-			strcpy(msgOut.m_verb, SIFTP_VERBS_IDENTIFY);
+		// client: username
+			Message_setType(&msgOut, SIFTP_VERBS_IDENTIFY);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || strcmp(msgIn.m_verb, SIFTP_VERBS_USERNAME))
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_USERNAME))
 			{
 				fprintf(stderr, "service_create(): username not specified by client.\n");
 				return false;
 			}
-			
-			//XXX check username... not required for this lab
 		
-		// SERVER: accept|deny
-		// CLIENT: password
-			strcpy(msgOut.m_verb, SIFTP_VERBS_ACCEPTED);
+		// server: accept|deny
+		// client: password
+			Message_setType(&msgOut, SIFTP_VERBS_ACCEPTED); //XXX check username... not required for this project
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || strcmp(msgIn.m_verb, SIFTP_VERBS_PASSWORD))
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_PASSWORD))
 			{
 				fprintf(stderr, "service_create(): password not specified by client.\n");
 				return false;
 			}
 		
-		// SERVER: accept|deny
-			if(strcmp(msgIn.m_param, SERVER_PASSWORD) == 0)
+		// server: accept|deny
+			if(Message_hasValue(&msgIn, SERVER_PASSWORD))
 			{
-				strcpy(msgOut.m_verb, SIFTP_VERBS_ACCEPTED);
+				Message_setType(&msgOut, SIFTP_VERBS_ACCEPTED);
 				siftp_send(a_socket, &msgOut);
 			}
 			else
 			{
-				strcpy(msgOut.m_verb, SIFTP_VERBS_DENIED);
+				Message_setType(&msgOut, SIFTP_VERBS_DENIED);
 				siftp_send(a_socket, &msgOut);
 				
 				fprintf(stderr, "service_create(): client password rejected.\n");
@@ -176,158 +175,193 @@ Boolean session_create(const int a_socket)
 	return true;
 }
 
-inline Boolean session_destroy(const int a_socket)
-{
-	#ifndef NODEBUG
-		printf("session_destroy(): closing session.");
-	#endif
-		
-	// variables
-		Message msgOut;
-
-	// init vars
-		Message_reset(&msgOut);
-		
-	// send notice
-		strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_END);
-		return siftp_send(a_socket, &msgOut);
-}
-
 void service_loop(const int a_socket)
 {
 	// variables
 		Message msg;
-		Boolean status;
-		char cmd[SERVER_COMMAND_SIZE];
 		
 	// init vars
-		Message_reset(&msg);
+		Message_clear(&msg);
 	
-	
-	while(1)
+	while(siftp_recv(a_socket, &msg)) // await request
 	{
-		// await request
-			if(siftp_recv(a_socket, &msg) && strcmp(msg.m_verb, SIFTP_VERBS_SESSION_END) != 0)
-			{
-				// parse request
-					strncpy(cmd, msg.m_param, SERVER_COMMAND_SIZE);
+		if(Message_hasType(&msg, SIFTP_VERBS_SESSION_END) || Message_hasType(&msg, ""))
+			break;
+		
+		else
+		{
+			// parse request
+				#ifndef NODEBUG
+					printf("service_loop(): got command {str='%s',arg='%s'}\n", Message_getValue(&msg), strchr(Message_getValue(&msg), ' '));
+				#endif
+				
+			// handle request
+				service_command(a_socket, Message_getValue(&msg));
+				/*
+				if(!service_command(a_socket, Message_getValue(&msg))) // send failure notification
+				{
+					Message_setType(&msg, SIFTP_VERBS_ABORT);
 					
-					#ifndef NODEBUG
-						printf("service_loop(): got command '%s'\n", cmd);
-					#endif
-					
-				// handle request
-					if(strstr(cmd, "ls"))
-						status = cmd_ls(a_socket, msg.m_param);
-					
-		/*			else if(strstr(cmd, "pwd"))
-						status = cmd_pwd(a_socket, &msg.m_param);
-					
-					else if(strstr(cmd, "cd"))
-						status = cmd_cd(a_socket, &msg.m_param);
-					
-					else if(strstr(cmd, "get"))
-						status = cmd_get(a_socket, &msg.m_param);
-					
-					else if(strstr(cmd, "put"))
-						status = cmd_put(a_socket, &msg.m_param);
-		*/			
-					else // unknown request
+					if(!siftp_send(a_socket, &msg))
 					{
-						strcpy(msg.m_verb, SIFTP_VERBS_COMMAND_STATUS);
-						msg.m_param[0] = false;
-						
-						siftp_send(a_socket, &msg);
+						fprintf(stderr, "service_loop(): unable to send faliure notice.\n");
+						break;
 					}
-			}
-			
-			else
-				break;
+				}
+				*/
+		}
 	}
 }
 
-Boolean cmd_ls(const int a_socket, const String a_cmdStr)
+
+Boolean service_command(const int a_socket, const String a_cmdStr)
 {
-	#ifndef NODEBUG
-		printf("cmd_ls(): entering\n");
-	#endif
-	
 	// variables
-		Message msgOut;
+		Message msgOut, msgIn;
+		Boolean cmdStatus;
+		
+		char cmdName[MODEL_COMMAND_SIZE+1];
+		String cmdArg, dataBuf;
+		int dataBufLen;
 		
 		DIR *p_dirFd;
 		struct dirent *p_dirInfo;
+		struct stat fileStats;
 		
-		String buf = NULL, cmdArg;
-		int bufLen, bufIndex;
-		Boolean status = true;
+	// init variables
+		Message_clear(&msgOut);
+		Message_clear(&msgIn);
 		
-	// init vars
-		Message_reset(&msgOut);
+		// command name
+			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
+			cmdName[MODEL_COMMAND_SIZE] = '\0';
 		
-	// validate command
-		if((cmdArg = strchr(a_cmdStr, ' ')) == NULL)
-			cmdArg = g_pwd;
+		// argument string
+			if((cmdArg = strchr(a_cmdStr, ' ')) != NULL)
+				cmdArg += sizeof(char);
 		
-		if((p_dirFd = opendir(cmdArg)) == NULL)
-		{
-			perror("cmd_ls()");
-			status = false;
-		}
-		
-		strcpy(msgOut.m_verb, SIFTP_VERBS_COMMAND_STATUS);
-		msgOut.m_param[0] = status;
-		if(!siftp_send(a_socket, &msgOut) || !status)
-			return false;
+		cmdStatus = true;
 	
-	
-	// determine buffer size
-		bufLen=0;
+	if(strstr(cmdName, "ls"))
+	{
+		int dataBufIndex;
 		
-		while((p_dirInfo = readdir(p_dirFd)))
-			bufLen += strlen(p_dirInfo->d_name) + 1;
+		// validate command
+			if((p_dirFd = opendir(g_pwd)) == NULL)
+			{
+				perror(a_cmdStr);
+				cmdStatus = false;
+			}
+			
+		// send status notification
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND_STATUS);
+			Message_getValue(&msgOut)[0] = cmdStatus;
+			
+			if(!siftp_send(a_socket, &msgOut) || !cmdStatus)
+				return false;
 		
-		#ifndef NODEBUG
-			printf("cmd_ls(): buffer size = %d\n", bufLen);
-		#endif
+		// determine buffer size
+			dataBufLen=0;
+			
+			while((p_dirInfo = readdir(p_dirFd)))
+				dataBufLen += strlen(p_dirInfo->d_name) + 1;
+			
+			#ifndef NODEBUG
+				printf("cmd_ls(): buffer size = %d\n", dataBufLen);
+			#endif
+			
+			rewinddir(p_dirFd);
+			
+		// allocate buffer
+			if((dataBuf = calloc(dataBufLen, sizeof(char))) == NULL)
+			{
+				closedir(p_dirFd);
+				fprintf(stderr, "cmd_ls(): calloc() failed.\n");
+				return false;
+			}
 		
-		rewinddir(p_dirFd);
-		
-	// allocate buffer
-	
-		if((buf = malloc(bufLen * sizeof(char))) == NULL)
-		{
+		// read contents into buffer
+			dataBufIndex=0;
+			
+			while((p_dirInfo = readdir(p_dirFd)))
+			{
+				strcpy(&dataBuf[dataBufIndex], p_dirInfo->d_name);
+				
+				#ifndef NODEBUG
+					printf("cmd_ls(): buffer[%d]='%s'\n", dataBufIndex, &dataBuf[dataBufIndex]);
+				#endif
+				
+				dataBufIndex += strlen(p_dirInfo->d_name);
+				dataBuf[dataBufIndex++] = '\n'; // overwrite null term
+				
+				#ifndef NODEBUG
+					printf("cmd_ls(): buffer {index=%d,val='%s'}\n", dataBufIndex, dataBuf);
+				#endif
+			}
 			closedir(p_dirFd);
-			fprintf(stderr, "cmd_ls(): malloc() failed.\n");
-			return false;
-		}
+			
+		// transmit data
+			cmdStatus = siftp_sendData(a_socket, dataBuf, dataBufLen);
+			
+		// clean up
+			free(dataBuf);
+			dataBuf = NULL;
+	}
 	
-	// read contents into buffer
+	else if(strstr(cmdName, "pwd"))
+	{
+		// send status notification
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND_STATUS);
+			Message_getValue(&msgOut)[0] = true;
+			
+			if(!siftp_send(a_socket, &msgOut))
+				return false;
+		
+		// transmit data
+			cmdStatus = siftp_sendData(a_socket, g_pwd, strlen(g_pwd));
+	}
 	
-		bufIndex=0;
+	else if(strstr(cmdName, "cd"))
+	{
+		int tempLen;
+		char tempPath[PATH_MAX+1];
+		memset(&tempPath, 0, sizeof(tempPath));
 		
-		while((p_dirInfo = readdir(p_dirFd)))
-		{
-			strcpy(&buf[bufIndex], p_dirInfo->d_name);
+		// validate command
 			
-			#ifndef NODEBUG
-				printf("cmd_ls(): buffer[%d]='%s'\n", bufIndex, &buf[bufIndex]);
-			#endif
-			
-			bufIndex += strlen(p_dirInfo->d_name);
-			buf[bufIndex++] = '\n'; // overwrite null term
-			
-			#ifndef NODEBUG
-				printf("cmd_ls(): buffer {index=%d,val='%s'}\n", bufIndex, buf);
-			#endif
-		}
-		closedir(p_dirFd);
+			// assemble absolute path from arg
+				if(cmdArg[0] == '/')
+					strcpy(tempPath, cmdArg);
+				else
+				{
+					strcpy(tempPath, g_pwd);
+					
+					// append arg to current path
+						if((tempLen = strlen(g_pwd)) + strlen(cmdArg) < sizeof(tempPath))
+							strcpy(&tempPath[tempLen], cmdArg);
+				}
 		
-	// send data to client
-		status = siftp_sendData(a_socket, buf, bufLen);
+			// change path
+				if(realpath(cmdArg, tempPath) != NULL && stat(tempPath, &fileStats) == 0 && S_ISDIR(fileStats.st_mode))
+				{
+					strncpy(g_pwd, tempPath, sizeof(tempPath));
+				}
+				else
+				{
+					perror(a_cmdStr);
+					cmdStatus = false;
+				}
 		
-	// clean up
-		free(buf);
-
-	return status;
+		// send status notification
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND_STATUS);
+			Message_getValue(&msgOut)[0] = cmdStatus;
+			
+			if(!siftp_send(a_socket, &msgOut))
+				return false;
+	}
+	
+	else
+		cmdStatus = false;
+	
+	return cmdStatus;
 }

@@ -11,6 +11,8 @@
 #ifndef SIFTP_H
 #define SIFTP_H
 
+#include <string.h>
+
 	/* debugging */
 	
 	/* constants */
@@ -74,11 +76,50 @@
 		 */
 		inline void Message_destroy(Message *ap_msg);
 		
+	/* accessors */
+	
 		/**
-		 * Null terminates member strings (character arrays).
+		 * Returns the type of the Message.
 		 * @pre	ap_msg != NULL
 		 */
-		inline void Message_reset(Message *ap_msg);
+		#define Message_getType(ap_msg) ( (ap_msg)->m_verb )
+		
+		/**
+		 * Changes the type of the Message.
+		 * @pre	ap_msg != NULL
+		 */
+		#define Message_setType(ap_msg, arg) ( strcpy((ap_msg)->m_verb, arg) )
+		
+		/**
+		 * Returns the value of the Message.
+		 * @pre	ap_msg != NULL
+		 */
+		#define Message_getValue(ap_msg) ( (ap_msg)->m_param )
+		
+		/**
+		 * Changes the value of the Message.
+		 * @pre	ap_msg != NULL
+		 */
+		#define Message_setValue(ap_msg, arg) ( strcpy((ap_msg)->m_param, arg) )
+		
+		/**
+		 * Checks if type of the Message is equal to the given type.
+		 * @pre	ap_msg != NULL
+		 */
+		#define Message_hasType(ap_msg, type) ( strcmp((ap_msg)->m_verb, type) == 0 )
+		
+		/**
+		 * Checks if value of the Message is equal to the given value.
+		 * @pre	ap_msg != NULL
+		 */
+		#define Message_hasValue(ap_msg, value) ( strcmp((ap_msg)->m_param, value) == 0 )
+		
+		/**
+		 * Fills the Message member values with zeros.
+		 * @pre	ap_msg != NULL
+		 */
+		#define Message_clear(ap_msg) ( memset(ap_msg, 0, sizeof(Message)) )
+		
 		
 	/* utility functions */
 	
@@ -141,3 +182,4 @@
 		 */
 		String siftp_recvData(const int a_socket, int *ap_length);
 #endif
+

@@ -48,11 +48,6 @@
 		if(ap_msg != NULL)
 			free(ap_msg);
 	}
-	
-	inline void Message_reset(Message *ap_msg)
-	{
-		memset(ap_msg, 0, sizeof(Message));
-	}
 
 // utility functions
 
@@ -151,7 +146,7 @@
 				strncpy(ap_result->m_param, &a_str[SIFTP_VERB_SIZE], SIFTP_PARAMETER_SIZE);
 				
 				#ifndef NODEBUG
-					printf("deserialize(): message [verb='%s',param='%s']\n", ap_result->m_verb, ap_result->m_param);
+					printf("deserialize(): message {verb='%s',param='%s'}\n", ap_result->m_verb, ap_result->m_param);
 				#endif
 				
 			return true;
@@ -243,8 +238,9 @@
 					{
 						memset(&msgOut.m_param, 0, sizeof(msgOut.m_param));
 						strncpy(msgOut.m_param, &a_data[tempLen], SIFTP_PARAMETER_SIZE);
+						
 						if(!siftp_send(a_socket, &msgOut))
-						return false;
+							return false;
 					}
 				
 				// tailer
@@ -310,7 +306,7 @@
 								}
 							
 							// store data
-								if(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_PAYLOAD) == 0)
+								if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_PAYLOAD))
 								{
 									if(tempLen < *ap_length)
 										strncpy(&buf[tempLen], msgIn.m_param, SIFTP_PARAMETER_SIZE);
@@ -322,8 +318,18 @@
 									
 									tempLen += SIFTP_PARAMETER_SIZE;
 								}
+								else if(Message_hasType(&msgIn, SIFTP_VERBS_ABORT)) // transfer aborted
+								{
+									fprintf(stderr, "siftp_recvData(): transfer aborted by remote host.\n");
+									
+									// clean up
+										free(buf);
+										buf = NULL;
+										
+									break;
+								}
 						}
-						while(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_TAILER));
+						while(!Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_TAILER));
 				}
 				
 			return buf;

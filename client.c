@@ -5,6 +5,7 @@
  * SimpleFTP client.
 **/
 
+#include "model.h"
 #include "client.h"
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -39,9 +40,9 @@ int main(int a_argc, char **ap_argv)
 		realpath(".", g_pwd);
 		
 	// establish link
-		if(!link_create(&socket, ap_argv[1], ap_argv[2]))
+		if(!service_create(&socket, ap_argv[1], ap_argv[2]))
 		{
-			fprintf(stderr, "%s: unable to connect to %s:%s\n", ap_argv[0], ap_argv[1], ap_argv[2]);
+			fprintf(stderr, "%s: Unable to connect to %s:%s.\n", ap_argv[0], ap_argv[1], ap_argv[2]);
 			return 2;
 		}
 		
@@ -50,15 +51,18 @@ int main(int a_argc, char **ap_argv)
 		{
 			close(socket);
 			
-			fprintf(stderr, "%s: unable to establish session\n", ap_argv[0]);
+			fprintf(stderr, "%s: Unable to establish session.\n", ap_argv[0]);
 			return 3;
 		}
+		
+		printf("\nSession established successfully.");
 	
 	// handle user commands
-		input_loop(socket);
+		service_loop(socket);
 	
 	// destroy session
-		session_destroy(socket);
+		if(session_destroy(socket))
+			printf("Session terminated successfully.\n");
 		
 	// destroy link
 		close(socket);
@@ -66,23 +70,23 @@ int main(int a_argc, char **ap_argv)
 	return 0;
 }
 
-Boolean link_create(int *ap_socket, const String a_serverName, const String a_serverPort)
+Boolean service_create(int *ap_socket, const String a_serverName, const String a_serverPort)
 {
 	// variables
 		struct sockaddr_in serverAddr;
 		struct hostent *p_serverInfo;
 		
-	// assemble server address struct
+	// create server address
 		
-		// determine dotted quad str from DNS
+		// determine dotted quad str from DNS query
 			if((p_serverInfo = gethostbyname(a_serverName)) == NULL)
 			{
-				herror("link_create()");
+				herror("service_create()");
 				return false;
 			}
 			
 			#ifndef NODEBUG
-				printf("link_create(): serverName='%s', serverAddr='%s'\n", a_serverName, inet_ntoa(*((struct in_addr *)p_serverInfo->h_addr)));
+				printf("service_create(): serverName='%s', serverAddr='%s'\n", a_serverName, inet_ntoa(*((struct in_addr *)p_serverInfo->h_addr)));
 			#endif
 			
 			serverAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr *)p_serverInfo->h_addr)));
@@ -93,14 +97,14 @@ Boolean link_create(int *ap_socket, const String a_serverName, const String a_se
 	// create socket
 		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
 		{
-			perror("link_create()");
+			perror("service_create()");
 			return false;
 		}
 	
-	// establish connection
+	// connect on socket
 		if((connect(*ap_socket, (struct sockaddr *)&serverAddr, sizeof(struct sockaddr))) < 0)
 		{
-			perror("link_create()");
+			perror("service_create()");
 			close(*ap_socket);
 			return false;
 		}
@@ -114,212 +118,212 @@ Boolean session_create(const int a_socket)
 		Message msgOut, msgIn;
 		
 	// init vars
-		Message_reset(&msgOut);
-		Message_reset(&msgIn);
-		
+		Message_clear(&msgOut);
+		Message_clear(&msgIn);
 		
 	// session challenge dialogue
 	
-		// c: greeting
-		// s: identify
-			strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_BEGIN);
+		// cilent: greeting
+		// server: identify
+			Message_setType(&msgOut, SIFTP_VERBS_SESSION_BEGIN);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_IDENTIFY, SIFTP_VERB_SIZE))
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_IDENTIFY))
 			{
 				fprintf(stderr, "session_create(): connection request rejected.\n");
 				return false;
 			}
 			
-		// C: username
-		// S: accept|deny
-			strcpy(msgOut.m_verb, SIFTP_VERBS_USERNAME);
+		// cilent: username
+		// server: accept|deny
+			Message_setType(&msgOut, SIFTP_VERBS_USERNAME);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_ACCEPTED, SIFTP_VERB_SIZE))
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
 			{
 				fprintf(stderr, "session_create(): username rejected.\n");
 				return false;
 			}
 		
-		// C: password
-		// S: accept|deny
+		// cilent: password
+		// server: accept|deny
 		
-			strcpy(msgOut.m_verb, SIFTP_VERBS_PASSWORD);
+			Message_setType(&msgOut, SIFTP_VERBS_PASSWORD);
 			
 			// get user input
 				printf("\npassword: ");
 				scanf("%s", msgOut.m_param);
 		
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_ACCEPTED, SIFTP_VERB_SIZE))
+			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
 			{
 				fprintf(stderr, "session_create(): password rejected.\n");
 				return false;
 			}
 		
-		// connection now established
-		
+		// session now established
+			#ifndef NODEBUG
+				printf("session_create(): success\n");
+			#endif
+			
 	return true;
 }
 
-inline Boolean session_destroy(const int a_socket)
+void service_loop(const int a_socket)
 {
 	// variables
-		Message msgOut;
+		char buf[SIFTP_MESSAGE_SIZE+1];
+		Boolean isLocal, status, isLooping = true;
+		String bufCR;
 		
-	// init vars
-		Message_reset(&msgOut);
-		
-	// send notice
-		strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_END);
-		return siftp_send(a_socket, &msgOut);
-}
-
-void input_loop(const int a_socket)
-{
-	char buf[CLIENT_INPUT_SIZE], cmd[CLIENT_COMMAND_SIZE];
-	Boolean isLocal, status;
-	
-	while(1)
+	while(isLooping)
 	{
 		// read input
 			printf("\nSimpleFTP> ");
-			scanf("%s", buf);
+			memset(&buf, 0, sizeof(buf));
+			fgets(buf, sizeof(buf), stdin);
+			
+			// remove newline
+			if((bufCR = strrchr(buf, '\n')) != NULL)
+				*bufCR = '\0';
 			
 		// parse input
 			isLocal = (buf[0] == 'l') && (buf[1] != 's');
-			strncpy(cmd, &buf[(isLocal ? 1 : 0)], CLIENT_COMMAND_SIZE);
 			
 		// handle commands
-			if(strstr(cmd, "ls"))
-				status = cmd_ls(a_socket, isLocal, buf);
-
-			else if(strstr(cmd, "pwd"))
-				status = cmd_pwd(a_socket, isLocal, buf);
-
-/*			else if(strstr(cmd, "cd"))
-				status = cmd_cd(a_socket, isLocal, buf);
-
-			else if(strstr(cmd, "get"))
-				status = cmd_get(a_socket, isLocal, buf);
-
-			else if(strstr(cmd, "put"))
-				status = cmd_put(a_socket, isLocal, buf);
-*/
-			else if(strstr(cmd, "help"))
+			status = true;
+			
+			if(strstr(buf, "exit"))
 			{
-				status = true;
-				
-				printf("ls\t-displays contents of remote current working directory.\n");
-				printf("lls\t-displays contents of local current working directory.\n");
-				printf("pwd\t-displays path of remote current working directory.\n");
-				printf("lpwd\t-displays path of local current working directory.\n");
-				printf("cd <path>\t-changes the remote current working directory to the specified <path>.\n");
-				printf("lcd <path>\t-changes the local current working directory to the specified <path>.\n");
-				printf("get <file>\t-downloads the remote <file> to local current working directory.\n");
-				printf("put <file>\t-uploads the local <file> to remote current working directory.\n");
-				printf("help\t-displays this message.\n");
-				printf("exit\t-leaves this program.\n");
+				isLooping = false;
 			}
-
-			else if(strstr(cmd, "exit"))
-				break;
-
+			else if(strstr(buf, "help"))
+			{
+				printf("\nls\n  displays contents of remote current working directory.\n");
+				printf("\nlls\n  displays contents of local current working directory.\n");
+				printf("\npwd\n  displays path of remote current working directory.\n");
+				printf("\nlpwd\n  displays path of local current working directory.\n");
+				printf("\ncd <path>\n  changes the remote current working directory to the specified <path>.\n");
+				printf("\nlcd <path>\n  changes the local current working directory to the specified <path>.\n");
+				printf("\nget <file>\n  downloads the remote <file> to local current working directory.\n");
+				printf("\nput <file>\n  uploads the local <file> to remote current working directory.\n");
+				printf("\nhelp\n  displays this message.\n");
+				printf("\nexit\n  terminates this program.\n");
+			}
+			else if(strlen(buf) > 0)
+			{
+				status = service_command(a_socket, buf);
+			}
 			else
-			{
-				status = false;
-				printf("Invalid command. Try 'help'.");
-			}
+				continue;
+			
 			
 		// display command status
 			printf("\n(status) %s.", (status ? "Success" : "Failure"));
 	}
 }
 
-Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_cmdStr)
+Boolean service_command(const int a_socket, const String a_cmdStr)
 {
 	// variables
 		Message msgOut, msgIn;
+		Boolean cmdStatus;
+		
+		char cmdName[MODEL_COMMAND_SIZE+1];
+		String cmdArg, dataBuf;
+		int dataBufLen;
+		
 		DIR *p_dirFd;
 		struct dirent *p_dirInfo;
-		String buf = NULL;
-		int bufLen;
+		struct stat fileStats;
 		
-	// init vars
-		Message_reset(&msgOut);
-		Message_reset(&msgIn);
+	// init variables
+		Message_clear(&msgOut);
+		Message_clear(&msgIn);
 		
-	// check domain
-		if(a_isLocal)
+		// command name
+			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
+			cmdName[MODEL_COMMAND_SIZE] = '\0';
+		
+		cmdArg = strchr(a_cmdStr, ' '); // argument string
+		cmdStatus = true;
+	
+	if(strstr(cmdName, "lls"))
+	{
+		if((p_dirFd = opendir(g_pwd)) != NULL)
 		{
-			// open
-				if((p_dirFd = opendir(g_pwd)) == NULL)
+			while((p_dirInfo = readdir(p_dirFd)))
+				printf("%s\n", p_dirInfo->d_name); // display contents
+			
+			closedir(p_dirFd);
+		}
+		else
+		{
+			perror(a_cmdStr);
+			cmdStatus = false;
+		}
+	}
+	
+	else if(strstr(cmdName, "lpwd"))
+	{
+		printf("%s", g_pwd);
+	}
+	
+	else if(strstr(cmdName, "lcd"))
+	{
+		if(stat(cmdArg, &fileStats) == 0 && S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IRUSR)) // check perms of wanted path
+		{
+			realpath(cmdArg, g_pwd);
+		}
+		else
+		{
+			perror(a_cmdStr);
+			cmdStatus = false;
+		}
+	}
+	
+	else if(strstr(cmdName, "ls") || strstr(cmdName, "pwd") || strstr(cmdName, "cd"))
+	{
+		// build command
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
+			Message_setValue(&msgOut, a_cmdStr);
+		
+		// perform command
+			if(remote_command(a_socket, &msgOut, &msgIn))
+			{
+				if(strstr(cmdName, "cd") == NULL) // this command doesn't print output
 				{
-					perror("cmd_ls()");
-					return false;
+					dataBuf = siftp_recvData(a_socket, &dataBufLen);
+					printf("%s", dataBuf);
+					
+					// clean up
+						free(dataBuf);
+						dataBuf = NULL;
 				}
-
-			// read
-				while((p_dirInfo = readdir(p_dirFd)))
-					printf("%s\n", p_dirInfo->d_name);
-				
-			// close
-				closedir(p_dirFd);
-		}
-		else
-		{
-			// build query
-				strcpy(msgOut.m_verb, SIFTP_VERBS_COMMAND);
-				strcpy(msgOut.m_param, "ls");
+			}
+			else
+				cmdStatus = false;
+	}
+	
+	
+	else if(strstr(cmdName, "cd"))
+	{
+		// build query
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
+			Message_setValue(&msgOut, "pwd");
+		
+		// perform command
+			if(!remote_command(a_socket, &msgOut, &msgIn))
+				return false;
 			
-			// query server
-				if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_COMMAND_STATUS, SIFTP_VERB_SIZE) || msgIn.m_param[0] == false)
-					return false;
+		// print result
+			dataBuf = siftp_recvData(a_socket, &dataBufLen);
+			printf("%s", dataBuf);
 			
-			// get result
-				buf = siftp_recvData(a_socket, &bufLen);
-				
-			// print result
-				printf("%s", buf);
-				
 			// clean up
-				free(buf);
-		}
-		
-	return true;
+				free(dataBuf);
+				dataBuf = NULL;
+	}
+	
+	else
+		cmdStatus = false;
+	
+	return cmdStatus;
 }
-
-Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_cmdStr)
-{
-	// variables
-		Message msgOut, msgIn;
-		
-	// init vars
-		Message_reset(&msgOut);
-		Message_reset(&msgIn);
-		
-	// check domain
-		if(a_isLocal)
-		{
-			printf("%s", g_pwd);
-		}
-		else
-		{
-			// build query
-				strcpy(msgOut.m_verb, SIFTP_VERBS_COMMAND);
-				strcpy(msgOut.m_param, "pwd");
-			
-			// query server
-				if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_COMMAND_STATUS, SIFTP_VERB_SIZE) || msgIn.m_param[0] == false)
-					return false;
-				
-			// get result
-				if(!siftp_recv(a_socket, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_DATA_GRAM, SIFTP_VERB_SIZE))
-					return false;
-				
-			// print result
-				printf("%s", msgIn.m_param);
-		}
-		
-	return true;
-}
-
-
