@@ -259,7 +259,7 @@ Boolean cmd_ls(const int a_socket, const String a_cmdStr)
 		struct dirent *p_dirInfo;
 		
 		String buf = NULL, cmdArg;
-		unsigned int bufLen=0;
+		int bufLen, bufIndex;
 		Boolean status = true;
 		
 	// init vars
@@ -280,22 +280,45 @@ Boolean cmd_ls(const int a_socket, const String a_cmdStr)
 		if(!siftp_send(a_socket, &msgOut) || !status)
 			return false;
 	
+	
+	// determine buffer size
+		bufLen=0;
+		
+		while((p_dirInfo = readdir(p_dirFd)))
+			bufLen += strlen(p_dirInfo->d_name) + 1;
+		
+		#ifndef NODEBUG
+			printf("cmd_ls(): buffer size = %d\n", bufLen);
+		#endif
+		
+		rewinddir(p_dirFd);
+		
+	// allocate buffer
+	
+		if((buf = malloc(bufLen * sizeof(char))) == NULL)
+		{
+			closedir(p_dirFd);
+			fprintf(stderr, "cmd_ls(): malloc() failed.\n");
+			return false;
+		}
+	
 	// read contents into buffer
+	
+		bufIndex=0;
+		
 		while((p_dirInfo = readdir(p_dirFd)))
 		{
-			// create space in buffer
-			if((buf = realloc(buf, p_dirInfo->d_reclen * sizeof(char))) == NULL)
-			{
-				closedir(p_dirFd);
-				fprintf(stderr, "cmd_ls(): realloc() failed.\n");
-				return false;
-			}
-			
-			strcpy(&buf[bufLen], p_dirInfo->d_name);
-			bufLen += p_dirInfo->d_reclen;
+			strcpy(&buf[bufIndex], p_dirInfo->d_name);
 			
 			#ifndef NODEBUG
-				printf("cmd_ls(): buffer [len=%d,val='%s']\n", bufLen, buf);
+				printf("cmd_ls(): buffer[%d]='%s'\n", bufIndex, &buf[bufIndex]);
+			#endif
+			
+			bufIndex += strlen(p_dirInfo->d_name);
+			buf[bufIndex++] = '\n'; // overwrite null term
+			
+			#ifndef NODEBUG
+				printf("cmd_ls(): buffer {index=%d,val='%s'}\n", bufIndex, buf);
 			#endif
 		}
 		closedir(p_dirFd);
