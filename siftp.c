@@ -71,7 +71,7 @@
 				
 				if((buf = malloc(++len * sizeof(char))) == NULL) // +1 for null term
 				{
-					fprintf(stderr, "siftp_escape: malloc() failed.\n");
+					fprintf(stderr, "siftp_escape(): malloc() failed.\n");
 					return NULL;
 				}
 				
@@ -102,7 +102,7 @@
 				
 				if((buf = malloc(++len * sizeof(char))) == NULL) // +1 for null term
 				{
-					fprintf(stderr, "siftp_unescape: malloc() failed.\n");
+					fprintf(stderr, "siftp_unescape(): malloc() failed.\n");
 					return NULL;
 				}
 				
@@ -156,7 +156,7 @@
 			// serialize message
 				if(!siftp_serialize(ap_query, buf))
 				{
-					fprintf(stderr, "siftp_query: Message serialization failed.\n");
+					fprintf(stderr, "siftp_query(): Message serialization failed.\n");
 					return false;
 				}
 				
