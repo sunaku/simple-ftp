@@ -320,11 +320,6 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 				}
 			}
 		}
-		
-		
-		#ifndef NODEBUG
-			perror("get()");
-		#endif
 			
 		return tempStatus;
 	}
@@ -357,10 +352,6 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 					}
 				}
 			}
-			
-			#ifndef NODEBUG
-				perror("put()");
-			#endif
 		}
 	}
 	
