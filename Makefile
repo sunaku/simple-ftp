@@ -1,3 +1,5 @@
+# NOTE: for building on Linux, comment out the $(CFLAGS_SOLARIS) in the $(CFLAGS) variable.
+
 # compiler flags
 CC=gcc
 CFLAGS_SOLARIS=-lnsl -lsocket -lresolv -D_PLATFORM_SOLARIS
