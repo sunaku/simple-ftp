@@ -138,7 +138,7 @@
 		String service_readFile(const String a_path, int *ap_length);
 		
 		/**
-		 * Returns contents of a dir, one entry per line.
+		 * Returns names of all files in the given directory. Each directory entry name is separated by a newline. The trailing newline is replaced by a null terminator.
 		 * @param	a_path	Path of the directory to read.
 		 * @param	ap_length	Storage for length of data.
 		 * @note	returns a dynamically allocated object.
