@@ -215,7 +215,6 @@ String service_readFile(const String a_path, int *ap_length)
 				if((buf = calloc(*ap_length, sizeof(char))) == NULL)
 				{
 					fclose(p_fileFd);
-					*ap_length = 0;
 					
 					fprintf(stderr, "readFile(): buffer alloc failed.\n");
 					return false;
@@ -225,11 +224,14 @@ String service_readFile(const String a_path, int *ap_length)
 				if(fread(buf, sizeof(char), *ap_length, p_fileFd) != *ap_length)
 				{
 					perror("readFile()");
+					fclose(p_fileFd);
+					
 					
 					free(buf);
 					buf = NULL;
-					*ap_length = 0;
 				}
+				
+			fclose(p_fileFd);
 		}
 		else
 			perror("readFile()");
@@ -241,7 +243,7 @@ String service_readFile(const String a_path, int *ap_length)
 String service_readDir(const String a_path, int *ap_length)
 {
 	String buf = NULL;
-	int i;
+	int i, j;
 	
 	DIR *p_dirFd;
 	struct dirent *p_dirInfo;
@@ -252,48 +254,32 @@ String service_readDir(const String a_path, int *ap_length)
 	}
 	else
 	{
-		// determine buffer size
-			*ap_length = 0;
-			
-			while((p_dirInfo = readdir(p_dirFd)))
-				*ap_length += strlen(p_dirInfo->d_name) + 1; // +1 for newline at end of string
+		// read contents into buffer
+		for(i = j = 0; (p_dirInfo = readdir(p_dirFd)); i = j)
+		{
+			j += strlen(p_dirInfo->d_name);
 			
 			#ifndef NODEBUG
-				printf("service_readDir(): buffer size = %d\n", *ap_length);
+				printf("service_readDir(): file='%s', i=%d, j=%d\n", p_dirInfo->d_name, i, j);
 			#endif
 			
-			rewinddir(p_dirFd);
+			// expand buffer
+				if((buf = realloc(buf, (j+1) * sizeof(char))) == NULL) // +1 for newline
+				{
+					closedir(p_dirFd);
+					
+					fprintf(stderr, "service_readDir(): buffer expansion failed.\n");
+					return false;
+				}
 			
-		// allocate buffer
-			if((buf = calloc(*ap_length, sizeof(char))) == NULL)
-			{
-				closedir(p_dirFd);
-				*ap_length = 0;
-				
-				fprintf(stderr, "service_readDir(): calloc() for buffer failed.\n");
-				return false;
-			}
+			strcpy(&buf[i], p_dirInfo->d_name);
+			buf[j++] = '\n'; // set newline
+		}
 		
-		// read contents into buffer
-			i = 0;
-			
-			while((p_dirInfo = readdir(p_dirFd)))
-			{
-				strcpy(&buf[i], p_dirInfo->d_name);
-				
-				#ifndef NODEBUG
-					printf("service_readDir()(): buffer[%d]='%s'\n", i, &buf[i]);
-				#endif
-				
-				i += strlen(p_dirInfo->d_name);
-				buf[i++] = '\n'; // append newline
-				
-				#ifndef NODEBUG
-					printf("service_readDir()(): buffer {index=%d,val='%s'}\n", i, buf);
-				#endif
-			}
-			
-			closedir(p_dirFd);
+		closedir(p_dirFd);
+		
+		buf[j-1] = '\0'; // replace last newline w/ null term
+		*ap_length = j; // store length
 	}
 	
 	return buf;
