@@ -48,10 +48,10 @@
 		
 	/* command funcs */
 	
-		Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_commandLine);
-		Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_commandLine);
-		Boolean cmd_cd(const int a_socket, const Boolean a_isLocal, const String a_commandLine);
-		Boolean cmd_get(const int a_socket, const Boolean a_isLocal, const String a_commandLine);
-		Boolean cmd_put(const int a_socket, const Boolean a_isLocal, const String a_commandLine);
+		Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_cmdStr);
+		Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_cmdStr);
+		Boolean cmd_cd(const int a_socket, const Boolean a_isLocal, const String a_cmdStr);
+		Boolean cmd_get(const int a_socket, const Boolean a_isLocal, const String a_cmdStr);
+		Boolean cmd_put(const int a_socket, const Boolean a_isLocal, const String a_cmdStr);
 		
 #endif

@@ -49,10 +49,9 @@
 			free(ap_msg);
 	}
 	
-	inline void Message_init(Message *ap_msg)
+	inline void Message_reset(Message *ap_msg)
 	{
-		memset(ap_msg->m_verb, 0, sizeof(ap_msg->m_verb));
-		memset(ap_msg->m_param, 0, sizeof(ap_msg->m_param));
+		memset(ap_msg, 0, sizeof(Message));
 	}
 
 // utility functions
@@ -208,4 +207,125 @@
 				return siftp_deserialize(buf, ap_response);
 		}
 		
+		Boolean siftp_sendData(const int a_socket, const String a_data, const int a_length)
+		{
+			#ifndef NODEBUG
+				printf("siftp_sendData(): data length = %d\n", a_length);
+			#endif
+			
+			// variables
+				Message msgOut;
+				int tempLen;
+				
+			// init vars
+				memset(&msgOut, 0, sizeof(msgOut));
+				
+			if(a_length <= SIFTP_PARAMETER_SIZE) // send as "datagram"
+			{
+				strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_GRAM);
+				strcpy(msgOut.m_param, a_data);
+				return siftp_send(a_socket, &msgOut);
+			
+			}
+			else // send as data stream
+			{
+				// header
+					strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_STREAM_HEADER);
+					sprintf(msgOut.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, a_length);
+					
+					if(!siftp_send(a_socket, &msgOut))
+						return false;
+				
+				// send data as discrete messages
+					strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_STREAM_PAYLOAD);
+					
+					for(tempLen=0; tempLen < a_length; tempLen += SIFTP_PARAMETER_SIZE)
+					{
+						memset(&msgOut.m_param, 0, sizeof(msgOut.m_param));
+						strncpy(msgOut.m_param, &a_data[tempLen], SIFTP_PARAMETER_SIZE);
+						if(!siftp_send(a_socket, &msgOut))
+						return false;
+					}
+				
+				// tailer
+					strcpy(msgOut.m_verb, SIFTP_VERBS_DATA_STREAM_TAILER);
+					return siftp_send(a_socket, &msgOut);
+			}
+		}
+		
+		String siftp_recvData(const int a_socket, int *ap_length)
+		{
+			// variables
+				Message msgIn;
+				String buf = NULL;
+				int tempLen;
+				
+			// init
+				memset(&msgIn, 0, sizeof(msgIn));
+				
+			// determine transfer type
+				if(!siftp_recv(a_socket, &msgIn))
+					return false;
+				
+				if(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_GRAM) == 0) // gram
+				{
+					*ap_length = strlen(msgIn.m_param);
+					
+					// allocate space
+					if((buf = calloc(++*ap_length,  sizeof(char))) == NULL) // +1 for null term
+					{
+						fprintf(stderr, "cmd_ls(): calloc() failed.\n");
+						return false;
+					}
+					
+					strcpy(buf, msgIn.m_param);
+				}
+				else if(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_HEADER) == 0) // stream
+				{
+					// allocate space
+						sscanf(msgIn.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, ap_length);
+						
+						#ifndef NODEBUG
+							printf("siftp_recvData(): data length = %d\n", *ap_length);
+						#endif
+						
+						if((buf = calloc(++*ap_length, sizeof(char))) == NULL) // +1 for null term
+						{
+							// cancel transmission
+							
+							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
+							return false;
+						}
+						
+					// read stream into buffer
+						tempLen=0;
+						
+						do
+						{
+							// read stream
+								if(!siftp_recv(a_socket, &msgIn))
+								{
+									free(buf);
+									return NULL;
+								}
+							
+							// store data
+								if(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_PAYLOAD) == 0)
+								{
+									if(tempLen < *ap_length)
+										strncpy(&buf[tempLen], msgIn.m_param, SIFTP_PARAMETER_SIZE);
+									else
+									{
+										fprintf(stderr, "siftp_recvData(): receiving more data than expected; ignoring excess data.\n");
+										break;
+									}
+									
+									tempLen += SIFTP_PARAMETER_SIZE;
+								}
+						}
+						while(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_TAILER));
+				}
+				
+			return buf;
+		}
 

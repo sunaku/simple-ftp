@@ -114,8 +114,8 @@ Boolean session_create(const int a_socket)
 		Message msgOut, msgIn;
 		
 	// init vars
-		Message_init(&msgOut);
-		Message_init(&msgIn);
+		Message_reset(&msgOut);
+		Message_reset(&msgIn);
 		
 		
 	// session challenge dialogue
@@ -166,7 +166,7 @@ inline Boolean session_destroy(const int a_socket)
 		Message msgOut;
 		
 	// init vars
-		Message_init(&msgOut);
+		Message_reset(&msgOut);
 		
 	// send notice
 		strcpy(msgOut.m_verb, SIFTP_VERBS_SESSION_END);
@@ -185,7 +185,7 @@ void input_loop(const int a_socket)
 			scanf("%s", buf);
 			
 		// parse input
-			isLocal = (buf[0] == 'l');
+			isLocal = (buf[0] == 'l') && (buf[1] != 's');
 			strncpy(cmd, &buf[(isLocal ? 1 : 0)], CLIENT_COMMAND_SIZE);
 			
 		// handle commands
@@ -234,18 +234,18 @@ void input_loop(const int a_socket)
 	}
 }
 
-Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_commandLine)
+Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_cmdStr)
 {
 	// variables
 		Message msgOut, msgIn;
 		DIR *p_dirFd;
 		struct dirent *p_dirInfo;
 		String buf = NULL;
-		int bufLen, tempLen;
+		int bufLen;
 		
 	// init vars
-		Message_init(&msgOut);
-		Message_init(&msgIn);
+		Message_reset(&msgOut);
+		Message_reset(&msgIn);
 		
 	// check domain
 		if(a_isLocal)
@@ -274,53 +274,27 @@ Boolean cmd_ls(const int a_socket, const Boolean a_isLocal, const String a_comma
 				if(!siftp_query(a_socket, &msgOut, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_COMMAND_STATUS, SIFTP_VERB_SIZE) || msgIn.m_param[0] == false)
 					return false;
 			
-			// determine result size
-				if(!siftp_recv(a_socket, &msgIn) || strncmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_HEADER, SIFTP_VERB_SIZE))
-					return false;
-				
-				bufLen = strtol(msgIn.m_param, (char **)NULL, SIFTP_VERBS_DATA_STREAM_HEADER_NUMBASE) + 1; // +1 for null term
-				
-			// allocate space
-				if((buf = malloc(bufLen * sizeof(char))) == NULL)
-				{
-					// cancel transmission
-					
-					fprintf(stderr, "cmd_ls(): malloc() failed.\n");
-					return false;
-				}
-				
 			// get result
-				tempLen=0;
-				do
-				{
-					siftp_recv(a_socket, &msgIn);
-					
-					if(msgIn.m_verb == SIFTP_VERBS_DATA_STREAM_PAYLOAD)
-					{
-						if(tempLen < bufLen)
-							strcpy(&buf[tempLen], msgIn.m_param);
-						
-						tempLen += SIFTP_PARAMETER_SIZE;
-					}
-				}
+				buf = siftp_recvData(a_socket, &bufLen);
 				
-				while(strncmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_TAILER, SIFTP_VERB_SIZE));
-			
 			// print result
 				printf("%s", buf);
+				
+			// clean up
+				free(buf);
 		}
 		
 	return true;
 }
 
-Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_commandLine)
+Boolean cmd_pwd(const int a_socket, const Boolean a_isLocal, const String a_cmdStr)
 {
 	// variables
 		Message msgOut, msgIn;
 		
 	// init vars
-		Message_init(&msgOut);
-		Message_init(&msgIn);
+		Message_reset(&msgOut);
+		Message_reset(&msgIn);
 		
 	// check domain
 		if(a_isLocal)

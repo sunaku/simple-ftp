@@ -38,7 +38,7 @@
 			
 			/** param fmt: [data_size_in_bytes] */
 			#define SIFTP_VERBS_DATA_STREAM_HEADER	"DSTH"
-			#define SIFTP_VERBS_DATA_STREAM_HEADER_NUMBASE	16
+			#define SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT	"%d"
 			#define SIFTP_VERBS_DATA_STREAM_PAYLOAD	"DSTP"
 			#define SIFTP_VERBS_DATA_STREAM_TAILER	"DSTT"
 		
@@ -78,7 +78,7 @@
 		 * Null terminates member strings (character arrays).
 		 * @pre	ap_msg != NULL
 		 */
-		inline void Message_init(Message *ap_msg);
+		inline void Message_reset(Message *ap_msg);
 		
 	/* utility functions */
 	
@@ -124,4 +124,20 @@
 		 * Waits for a one-way dialouge.
 		 */
 		Boolean siftp_recv(const int a_socket, Message *ap_response);
+		
+		/**
+		 * Performs a data transfer dialouge.
+		 * @param	a_socket	Socket descriptor on which to send.
+		 * @param	a_data	The data to send.
+		 * @param	a_length	Number of bytes to send.
+		 */
+		Boolean siftp_sendData(const int a_socket, const String a_data, const int a_length);
+		
+		/**
+		 * Performs a data transfer dialouge.
+		 * @param	a_socket	Socket descriptor on which to receive.
+		 * @param	ap_length	Storage for length (including null terminator) of received data.
+		 * Note: returns a malloc()ed object.
+		 */
+		String siftp_recvData(const int a_socket, int *ap_length);
 #endif
