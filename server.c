@@ -37,7 +37,7 @@ void sigchld_handler(int s)
 int main(int a_argc, char **ap_argv)
 {
 	// variables
-		int serverSocket, clientSocket, clientAddrSize;
+		int serverSocket, clientSocket, clientAddrSize, childPID;
 		struct sockaddr_in clientAddr;
 		struct sigaction signalAction;
 		
@@ -75,6 +75,11 @@ int main(int a_argc, char **ap_argv)
 			clientAddrSize = sizeof(clientAddr);
 			
 			// wait for a client
+			
+				#ifndef NODEBUG
+					printf("\nmain(): waiting for clients...\n");
+				#endif
+			
 				if((clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &clientAddrSize)) != -1)
 				{
 					#ifndef NODEBUG
@@ -82,7 +87,7 @@ int main(int a_argc, char **ap_argv)
 					#endif
 					
 				// dispatch job
-					if(fork() == 0) // child code
+					if((childPID = fork()) == 0) // child code
 					{
 						close(serverSocket); // child doesn't need this socket
 						
@@ -96,6 +101,10 @@ int main(int a_argc, char **ap_argv)
 							close(clientSocket);
 							return 0;
 					}
+					
+					#ifndef NODEBUG
+						printf("\nmain(): forked a child; pid=%d\n", childPID);
+					#endif
 					
 					close(clientSocket); // parent doesn't need this socket
 				}
