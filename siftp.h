@@ -2,9 +2,12 @@
  * Suraj Kurapati <skurapat@ucsc.edu>
  * CMPS-150, Spring04, final project
  *
- * SimpleFTP protocol structures interface.
+ * SimpleFTP protocol interface/definition.
  *
- * Serialized message format: flag|verb|parameter|flag
+ * Provides transport layer services such as sending and
+ * receiving Message streams and Message grams. This also
+ * defines the vocabulary and syntax for communication.
+ *
 **/
 
 
@@ -13,10 +16,10 @@
 
 #include <string.h>
 
-	/* debugging */
-	
 	/* constants */
 	
+		/* Serialized message format: verb|parameter */
+		
 		// dialouge
 			#define SIFTP_VERBS_SESSION_BEGIN	"HELO"
 			#define SIFTP_VERBS_SESSION_END	"GBYE"
@@ -32,20 +35,20 @@
 			#define SIFTP_VERBS_ABORT	"ABRT"
 			
 			#define SIFTP_VERBS_COMMAND	"CMND"
-			
-			/** param fmt: [status_byte] */
 			#define SIFTP_VERBS_COMMAND_STATUS	"CMST"
 			
 			#define SIFTP_VERBS_DATA_GRAM	"DGRM"
 			
-			/** param fmt: [data_size_in_bytes] */
+			/** param = [data_size_in_bytes] */
 			#define SIFTP_VERBS_DATA_STREAM_HEADER	"DSTH"
+			
 			#define SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT	"%d"
 			#define SIFTP_VERBS_DATA_STREAM_PAYLOAD	"DSTP"
 			#define SIFTP_VERBS_DATA_STREAM_TAILER	"DSTT"
 		
-		// sizes
 			#define SIFTP_FLAG	0x10
+			
+		// sizes
 			#define SIFTP_MESSAGE_SIZE	128
 			#define SIFTP_VERB_SIZE	4
 			#define SIFTP_PARAMETER_SIZE	( SIFTP_MESSAGE_SIZE - SIFTP_VERB_SIZE )
@@ -56,83 +59,90 @@
 		typedef enum { false, true } Boolean;
 		typedef char* String;
 		
-	/* structs */
+	/* data structures */
 	
+		/**
+		 * The basic communication primitive.
+		 */
 		struct TAG_Message
 		{
-			char m_verb[SIFTP_VERB_SIZE+1], m_param[SIFTP_PARAMETER_SIZE+1];
+			/** the message type/qualifier/preamble */
+			char m_verb[SIFTP_VERB_SIZE+1];
+			
+			/** the message content */
+			char m_param[SIFTP_PARAMETER_SIZE+1];
 		};
 		
-	/* constructors */
+		/* constructors */
+			
+			/**
+			 * Constructs a Message object.
+			 * @note	returns a dynamically allocated object.
+			 */
+			Message* Message_create(String a_verb, String a_param);
+			
+			/**
+			 * Destroys a Message object.
+			 */
+			inline void Message_destroy(Message *ap_msg);
+			
+		/* accessors */
 		
-		/**
-		 * Constructs a Message object.
-		 * Note: returns a malloc()ed object.
-		 */
-		Message* Message_create(String a_verb, String a_param);
-		
-		/**
-		 * Destroys a Message object.
-		 */
-		inline void Message_destroy(Message *ap_msg);
-		
-	/* accessors */
-	
-		/**
-		 * Returns the type of the Message.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_getType(ap_msg) ( (ap_msg)->m_verb )
-		
-		/**
-		 * Changes the type of the Message.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_setType(ap_msg, arg) ( strcpy((ap_msg)->m_verb, arg) )
-		
-		/**
-		 * Returns the value of the Message.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_getValue(ap_msg) ( (ap_msg)->m_param )
-		
-		/**
-		 * Changes the value of the Message.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_setValue(ap_msg, arg) ( strcpy((ap_msg)->m_param, arg) )
-		
-		/**
-		 * Checks if type of the Message is equal to the given type.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_hasType(ap_msg, type) ( strcmp((ap_msg)->m_verb, type) == 0 )
-		
-		/**
-		 * Checks if value of the Message is equal to the given value.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_hasValue(ap_msg, value) ( strcmp((ap_msg)->m_param, value) == 0 )
-		
-		/**
-		 * Fills the Message member values with zeros.
-		 * @pre	ap_msg != NULL
-		 */
-		#define Message_clear(ap_msg) ( memset(ap_msg, 0, sizeof(Message)) )
+			/**
+			 * Returns the type of the Message.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_getType(ap_msg) ( (ap_msg)->m_verb )
+			
+			/**
+			 * Changes the type of the Message.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_setType(ap_msg, arg) ( strcpy((ap_msg)->m_verb, arg) )
+			
+			/**
+			 * Returns the value of the Message.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_getValue(ap_msg) ( (ap_msg)->m_param )
+			
+			/**
+			 * Changes the value of the Message.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_setValue(ap_msg, arg) ( strcpy((ap_msg)->m_param, arg) )
+			
+			/**
+			 * Checks if type of the Message is equal to the given type.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_hasType(ap_msg, type) ( strcmp((ap_msg)->m_verb, type) == 0 )
+			
+			/**
+			 * Checks if value of the Message is equal to the given value.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_hasValue(ap_msg, value) ( strcmp((ap_msg)->m_param, value) == 0 )
+			
+			/**
+			 * Fills the Message member values with zeros.
+			 * @pre	ap_msg != NULL
+			 */
+			#define Message_clear(ap_msg) ( memset(ap_msg, 0, sizeof(Message)) )
 		
 		
-	/* utility functions */
+	/* services */
 	
 		/**
 		 * Escapes the SimpleFTP flags in the given string.
-		 * Note: returns a malloc()ed object.
+		 * @note	returns a dynamically allocated object.
 		 * @deprecated
 		 */
 		String siftp_escape(const String a_str);
 		
 		/**
 		 * Unescapes SimpleFTP flags in the payload.
-		 * Note: returns a malloc()ed object.
+		 * @note	returns a dynamically allocated object.
 		 * @deprecated
 		 */
 		String siftp_unescape(const String a_str);
@@ -172,8 +182,8 @@
 		/**
 		 * Performs a data transfer dialouge.
 		 * @param	a_socket	Socket descriptor on which to receive.
-		 * @param	ap_length	Storage for length (including null terminator) of received data.
-		 * Note: returns a malloc()ed object.
+		 * @param	ap_length	Storage for length of received data.
+		 * @note	returns a dynamically allocated object.
 		 */
 		String siftp_recvData(const int a_socket, int *ap_length);
 #endif
