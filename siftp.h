@@ -93,6 +93,7 @@
 			/**
 			 * Changes the type of the Message.
 			 * @pre	ap_msg != NULL
+			 * @pre	arg is null terminated
 			 */
 			#define Message_setType(ap_msg, arg) ( strcpy((ap_msg)->m_verb, arg) )
 			
@@ -105,18 +106,21 @@
 			/**
 			 * Changes the value of the Message.
 			 * @pre	ap_msg != NULL
+			 * @pre	arg is null terminated
 			 */
 			#define Message_setValue(ap_msg, arg) ( strcpy((ap_msg)->m_param, arg) )
 			
 			/**
 			 * Checks if type of the Message is equal to the given type.
 			 * @pre	ap_msg != NULL
+			 * @pre	value is null terminated
 			 */
 			#define Message_hasType(ap_msg, type) ( strcmp((ap_msg)->m_verb, type) == 0 )
 			
 			/**
 			 * Checks if value of the Message is equal to the given value.
 			 * @pre	ap_msg != NULL
+			 * @pre	value is null terminated
 			 */
 			#define Message_hasValue(ap_msg, value) ( strcmp((ap_msg)->m_param, value) == 0 )
 			
