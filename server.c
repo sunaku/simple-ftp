@@ -340,15 +340,31 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 						// send file
 						tempStatus = siftp_sendData(a_socket, dataBuf, dataBufLen);
 						
-						#ifndef NODEBUG 
-							printf("get(): sent file '%s'.\n", srcPath);
+						#ifndef NODEBUG
+							printf("get(): file sent %s.\n", tempStatus ? "OK" : "FAILED");
 						#endif
 					}
+					#ifndef NODEBUG
+					else
+						printf("get(): remote host didn't get status ACK.\n");
+					#endif
 					
 					free(dataBuf);
 				}
+				#ifndef NODEBUG
+				else
+					printf("get(): file reading failed.\n");
+				#endif
 			}
+			#ifndef NODEBUG
+			else
+				printf("get(): don't have read permissions.\n");
+			#endif
 		}
+		#ifndef NODEBUG
+		else
+			printf("get(): absolute path determining failed.\n");
+		#endif
 			
 		return tempStatus;
 	}
@@ -369,9 +385,17 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 					// receive file
 					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
 					{
+						#ifndef NODEBUG
+							printf("put(): about to write to file '%s'.\n", dstPath);
+						#endif
+						
 						tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen);
 						
 						free(dataBuf);
+						
+						#ifndef NODEBUG
+							printf("put(): file writing %s.\n", tempStatus ? "OK" : "FAILED");
+						#endif
 						
 						// send secondary ack: file was written OK
 						if(tempStatus)
@@ -379,9 +403,25 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 							return service_sendStatus(a_socket, true);
 						}
 					}
+					#ifndef NODEBUG
+					else
+						printf("put(): getting of remote file failed.\n");
+					#endif
 				}
+				#ifndef NODEBUG
+				else
+					printf("put(): remote host didn't get status ACK.\n");
+				#endif
 			}
+			#ifndef NODEBUG
+			else
+				printf("put(): don't have write permissions.\n");
+			#endif
 		}
+		#ifndef NODEBUG
+		else
+			printf("put(): absolute path determining failed.\n");
+		#endif
 	}
 	
 	return false;

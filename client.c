@@ -341,10 +341,30 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 							}
 							
 							free(dataBuf);
+							
+							#ifndef NODEBUG
+								printf("get(): file writing %s.\n", tempStatus ? "OK" : "FAILED");
+							#endif
 						}
+						#ifndef NODEBUG
+						else
+							printf("get(): getting of remote file failed.\n");
+						#endif
 					}
+					#ifndef NODEBUG
+					else
+						printf("get(): server gave negative ACK.\n");
+					#endif
 				}
+				#ifndef NODEBUG
+				else
+					printf("get(): don't have write permissions.\n");
+				#endif
 			}
+			#ifndef NODEBUG
+			else
+				printf("get(): absolute path determining failed.\n");
+			#endif
 			
 		return tempStatus;
 	}
@@ -385,16 +405,32 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 							
 								printf("%d bytes transferred.", dataBufLen);
 							}
-								
-							#ifndef NODEBUG 
-								printf("put(): sent file '%s'.\n", srcPath);
+							
+							#ifndef NODEBUG
+								printf("put(): file sent %s.\n", tempStatus ? "OK" : "FAILED");
 							#endif
 						}
+						#ifndef NODEBUG
+						else
+							printf("put(): server gave negative ACK.\n");
+						#endif
 						
 						free(dataBuf);
 					}
+					#ifndef NODEBUG
+					else
+						printf("put(): file reading failed.\n");
+					#endif
 				}
+				#ifndef NODEBUG
+				else
+					printf("put(): don't have read permissions.\n");
+				#endif
 			}
+			#ifndef NODEBUG
+			else
+				printf("put(): absolute path determining failed.\n");
+			#endif
 			
 		return tempStatus;
 	}
