@@ -38,18 +38,15 @@
 			#define SIFTP_VERBS_COMMAND_STATUS	"CMST"
 			
 			#define SIFTP_VERBS_DATA_GRAM	"DGRM"
-			
-			/** param = [data_size_in_bytes] */
-			#define SIFTP_VERBS_DATA_STREAM_HEADER	"DSTH"
-			
+			#define SIFTP_VERBS_DATA_STREAM_HEADER	"DSTH" /** param = [data_size_in_bytes] */
 			#define SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT	"%d"
 			#define SIFTP_VERBS_DATA_STREAM_PAYLOAD	"DSTP"
 			#define SIFTP_VERBS_DATA_STREAM_TAILER	"DSTT"
 		
 			#define SIFTP_FLAG	0x10
 			
-		// sizes
-			#define SIFTP_MESSAGE_SIZE	128
+		// sizes in bytes
+			#define SIFTP_MESSAGE_SIZE	( 1 << 10 )
 			#define SIFTP_VERB_SIZE	4
 			#define SIFTP_PARAMETER_SIZE	( SIFTP_MESSAGE_SIZE - SIFTP_VERB_SIZE )
 
