@@ -148,7 +148,7 @@
 			return true;
 		}
 
-		Boolean siftp_query(const int a_sockFd, const Message *ap_query, Message *ap_response)
+		Boolean siftp_query(const int a_socket, const Message *ap_query, Message *ap_response)
 		{
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
@@ -161,14 +161,14 @@
 				}
 				
 			// perform dialouge
-				send(a_sockFd, buf, SIFTP_MESSAGE_SIZE, 0);
-				recv(a_sockFd, buf, SIFTP_MESSAGE_SIZE, 0);
+				send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
+				recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
 				
 			// deserialize message
 				return siftp_deserialize(buf, ap_response);
 		}
 		
-		Boolean siftp_send(const int a_sockFd, const Message *ap_query)
+		Boolean siftp_send(const int a_socket, const Message *ap_query)
 		{
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
@@ -181,18 +181,18 @@
 				}
 				
 			// perform dialouge
-				send(a_sockFd, buf, SIFTP_MESSAGE_SIZE, 0);
+				send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
 				
 			return true;
 		}
 		
-		Boolean siftp_recv(const int a_sockFd, Message *ap_response)
+		Boolean siftp_recv(const int a_socket, Message *ap_response)
 		{
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
 				
 			// perform dialouge
-				recv(a_sockFd, buf, SIFTP_MESSAGE_SIZE, 0);
+				recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
 				
 			// deserialize message
 				return siftp_deserialize(buf, ap_response);

@@ -107,15 +107,15 @@
 		/**
 		 * Performs a simple query/response dialogue.
 		 */
-		Boolean siftp_query(const int a_sockFd, const Message *ap_query, Message *ap_response);
+		Boolean siftp_query(const int a_socket, const Message *ap_query, Message *ap_response);
 		
 		/**
 		 * Performs a one-way dialouge.
 		 */
-		Boolean siftp_send(const int a_sockFd, const Message *ap_query);
+		Boolean siftp_send(const int a_socket, const Message *ap_query);
 		
 		/**
 		 * Waits for a one-way dialouge.
 		 */
-		Boolean siftp_recv(const int a_sockFd, Message *ap_response);
+		Boolean siftp_recv(const int a_socket, Message *ap_response);
 #endif
