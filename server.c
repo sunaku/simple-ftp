@@ -62,8 +62,8 @@ int main(int a_argc, char **ap_argv)
 					#endif
 					
 				// dispatch job
-		//			if(fork() == 0) // child code
-		//			{
+					if(fork() == 0) // child code
+					{
 						// service the client
 							if(session_create(clientSocket))
 								service_loop(clientSocket);
@@ -73,7 +73,7 @@ int main(int a_argc, char **ap_argv)
 						// finished with client
 							close(clientSocket);
 							return 0;
-		//			}
+					}
 				}
 				else
 					perror("main()");
