@@ -10,7 +10,6 @@
  *
 **/
 
-
 #ifndef SIFTP_H
 #define SIFTP_H
 
@@ -136,14 +135,14 @@
 		/**
 		 * Escapes the SimpleFTP flags in the given string.
 		 * @note	returns a dynamically allocated object.
-		 * @deprecated
+		 * @deprecated	using fixed length messages instead.
 		 */
 		String siftp_escape(const String a_str);
 		
 		/**
 		 * Unescapes SimpleFTP flags in the payload.
 		 * @note	returns a dynamically allocated object.
-		 * @deprecated
+		 * @deprecated	using fixed length messages instead.
 		 */
 		String siftp_unescape(const String a_str);
 		
