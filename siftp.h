@@ -15,33 +15,38 @@
 	
 	/* constants */
 	
-		#define SIFTP_PASSWORD	"CE150"
-		#define SIFTP_PASSWORD_SIZE	8
+		// dialouge
+			#define SIFTP_VERBS_SESSION_BEGIN	"HELO"
+			#define SIFTP_VERBS_SESSION_END	"GBYE"
+			
+			#define SIFTP_VERBS_IDENTIFY	"IDNT"
+			#define SIFTP_VERBS_USERNAME	"USER"
+			#define SIFTP_VERBS_PASSWORD	"PASS"
+			
+			#define SIFTP_VERBS_ACCEPTED	"ACPT"
+			#define SIFTP_VERBS_DENIED	"DENY"
+			
+			#define SIFTP_VERBS_PROCEED	"PRCD"
+			#define SIFTP_VERBS_ABORT	"ABRT"
+			
+			#define SIFTP_VERBS_COMMAND	"CMND"
+			
+			/** param fmt: [status_byte] */
+			#define SIFTP_VERBS_COMMAND_STATUS	"CMST"
+			
+			#define SIFTP_VERBS_DATA_GRAM	"DGRM"
+			
+			/** param fmt: [data_size_in_bytes] */
+			#define SIFTP_VERBS_DATA_STREAM_HEADER	"DSTH"
+			#define SIFTP_VERBS_DATA_STREAM_HEADER_NUMBASE	16
+			#define SIFTP_VERBS_DATA_STREAM_PAYLOAD	"DSTP"
+			#define SIFTP_VERBS_DATA_STREAM_TAILER	"DSTT"
 		
-		#define	SIFTP_VERBS_SESSION_BEGIN	"HELO"
-		#define	SIFTP_VERBS_SESSION_END	"GBYE"
-		
-		#define	SIFTP_VERBS_IDENTIFY	"IDNT"
-		#define	SIFTP_VERBS_USERNAME	"USER"
-		#define	SIFTP_VERBS_PASSWORD	"PASS"
-		
-		#define	SIFTP_VERBS_ACCEPTED	"ACPT"
-		#define	SIFTP_VERBS_DENIED	"DENY"
-		
-		#define	SIFTP_VERBS_PROCEED	"PRCD"
-		#define	SIFTP_VERBS_ABORT	"ABRT"
-		
-		#define	SIFTP_VERBS_COMMAND	"CMND"
-		#define SIFTP_VERBS_COMMAND_STATUS	"CMST"
-		
-		#define SIFTP_VERBS_DATA_BEGIN	"DBEG"
-		#define SIFTP_VERBS_DATA_STREAM	"DSTR"
-		#define SIFTP_VERBS_DATA_END	"DEND"
-		
-		#define SIFTP_FLAG	0x10
-		#define SIFTP_MESSAGE_SIZE	256
-		#define SIFTP_VERB_SIZE	4
-		#define SIFTP_PARAMETER_SIZE	( SIFTP_MESSAGE_SIZE - SIFTP_VERB_SIZE )
+		// sizes
+			#define SIFTP_FLAG	0x10
+			#define SIFTP_MESSAGE_SIZE	256
+			#define SIFTP_VERB_SIZE	4
+			#define SIFTP_PARAMETER_SIZE	( SIFTP_MESSAGE_SIZE - SIFTP_VERB_SIZE )
 
 	/* typedefs */
 	
@@ -74,12 +79,14 @@
 		/**
 		 * Escapes the SimpleFTP flags in the given string.
 		 * Note: returns a malloc()ed object.
+		 * @deprecated
 		 */
 		String siftp_escape(const String a_str);
 		
 		/**
 		 * Unescapes SimpleFTP flags in the payload.
 		 * Note: returns a malloc()ed object.
+		 * @deprecated
 		 */
 		String siftp_unescape(const String a_str);
 		
@@ -100,7 +107,15 @@
 		/**
 		 * Performs a simple query/response dialogue.
 		 */
-		Boolean siftp_query(const int a_sockfd, const Message *ap_query, Message *ap_response);
+		Boolean siftp_query(const int a_sockFd, const Message *ap_query, Message *ap_response);
 		
+		/**
+		 * Performs a one-way dialouge.
+		 */
+		Boolean siftp_send(const int a_sockFd, const Message *ap_query);
 		
+		/**
+		 * Waits for a one-way dialouge.
+		 */
+		Boolean siftp_recv(const int a_sockFd, Message *ap_response);
 #endif
