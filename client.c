@@ -5,7 +5,7 @@
  * SimpleFTP client.
 **/
 
-#include "model.h"
+#include "service.h"
 #include "client.h"
 
 #include <sys/types.h>
@@ -139,6 +139,12 @@ Boolean session_create(const int a_socket)
 		// server: accept|deny
 			Message_setType(&msgOut, SIFTP_VERBS_USERNAME);
 			
+			// get user input
+				printf("\nusername: ");
+				
+				// XXX prohibited by this project
+				//scanf("%s", msgOut.m_param);
+			
 			if(!service_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
 			{
 				fprintf(stderr, "session_create(): username rejected.\n");
@@ -174,6 +180,9 @@ void service_loop(const int a_socket)
 		char buf[SIFTP_MESSAGE_SIZE+1];
 		Boolean status, isLooping = true;
 		String bufCR;
+		
+		String *p_argv;
+		int argc;
 		
 	while(isLooping)
 	{
@@ -212,42 +221,41 @@ void service_loop(const int a_socket)
 			}
 			else if(strlen(buf) > 0)
 			{
-				status = service_handleCmd(a_socket, buf);
+				// parse command arguments
+				if((p_argv = service_parseArgs(buf, &argc)) == NULL || argc <= 0)
+					status = false;
+				else
+					status = service_handleCmd(a_socket, p_argv, argc);
+				
+				// clean up
+					service_freeArgs(p_argv, argc);
+					p_argv = NULL;
 			}
 			else
 				continue;
-			
 			
 		// display command status
 			printf("\n(status) %s.", (status ? "Success" : "Failure"));
 	}
 }
 
-Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
+Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a_argc)
 {
 	// variables
-		Message msgOut, msgIn;
+		Message msgOut;
 		
-		char cmdName[MODEL_COMMAND_SIZE+1];
-		String cmdArg, dataBuf;
+		String dataBuf;
 		int dataBufLen;
 		
 		Boolean tempStatus;
 		
 	// init variables
 		Message_clear(&msgOut);
-		Message_clear(&msgIn);
-		
-		// command name
-			memset(cmdName, 0, sizeof(cmdName));
-			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
-		
-		// argument string
-			cmdArg = service_handleCmd_getNextArg(a_cmdStr);
-		
-	if(strstr(cmdName, "lls"))
+	
+	// handle commands
+	if(strcmp(ap_argv[0], "lls") == 0)
 	{
-		if((dataBuf = service_handleCmd_readDir(g_pwd, &dataBufLen)) != NULL)
+		if((dataBuf = service_readDir(g_pwd, &dataBufLen)) != NULL)
 		{
 			printf("%s", dataBuf);
 			free(dataBuf);
@@ -256,70 +264,125 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 		}
 	}
 	
-	else if(strstr(cmdName, "lpwd"))
+	else if(strcmp(ap_argv[0], "lpwd") == 0)
 	{
 		printf("%s", g_pwd);
 		return true;
 	}
 	
-	else if(strstr(cmdName, "lcd"))
+	else if(strcmp(ap_argv[0], "lcd") == 0 && a_argc > 1)
 	{
-		return service_handleCmd_chdir(a_cmdStr, cmdArg, g_pwd);
+		return service_handleCmd_chdir(g_pwd, ap_argv[1]);
 	}
 	
-	else if(strstr(cmdName, "ls") || strstr(cmdName, "pwd") || strstr(cmdName, "cd"))
+	else if(strcmp(ap_argv[0], "ls") == 0 || strcmp(ap_argv[0], "pwd") == 0)
 	{
 		// build command
 			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
-			Message_setValue(&msgOut, a_cmdStr);
-		
-		// perform command
-			if(remote_exec(a_socket, &msgOut))
-			{
-				if(strstr(cmdName, "cd") != NULL) // no output
-					return true;
-				
-				else
-				{
-					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
-					{
-						printf("%s", dataBuf);
-						free(dataBuf);
-						
-						return true;
-					}
-				}
-			}
-	}
-	
-	else if(strstr(cmdName, "get") && cmdArg != NULL)
-	{
-		String destFn;
-		char destPath[PATH_MAX+1];
-		
-		// init vars
-			if((destFn = service_handleCmd_getNextArg(cmdArg)) == NULL)
-				destFn = cmdArg;
-			
-			tempStatus = false;
-		
-		// build command
-			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
-			Message_setValue(&msgOut, a_cmdStr);
+			Message_setValue(&msgOut, ap_argv[0]);
 			
 		// perform command
 			if(remote_exec(a_socket, &msgOut))
 			{
 				if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
 				{
+					printf("%s", dataBuf);
+					free(dataBuf);
+					
+					return true;
+				}
+			}
+	}
+	
+	else if(strcmp(ap_argv[0], "cd") == 0 && a_argc > 1)
+	{
+		// build command
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
+			Message_setValue(&msgOut, ap_argv[0]);
+			strcat(Message_getValue(&msgOut), " ");
+			strcat(Message_getValue(&msgOut), ap_argv[1]);
+			
+		// perform command
+			return remote_exec(a_socket, &msgOut);
+	}
+	
+	else if(strcmp(ap_argv[0], "get") == 0 && a_argc > 1)
+	{
+		char dstPath[PATH_MAX+1];
+		String src, dst;
+		
+		// init vars
+			tempStatus = false;
+			src = ap_argv[1];
+			dst = (a_argc > 2) ? ap_argv[2] : src;
+		
+		// build command with param='get remote-path'
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
+			Message_setValue(&msgOut, ap_argv[0]);
+			strcat(Message_getValue(&msgOut), " ");
+			strcat(Message_getValue(&msgOut), src);
+			
+		// perform command
+			if(remote_exec(a_socket, &msgOut))
+			{
+				// receive destination file
+				if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
+				{
 					// determine destination file path
-					if(service_getAbsolutePath(g_pwd, destFn, destPath))
+					if(service_getAbsolutePath(g_pwd, dst, dstPath))
 					{
-						tempStatus = service_handleCmd_writeFile(destPath, dataBuf, dataBufLen-1);
+						// write file
+						if((tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen-1, SERVICE_FILE_PERMS)))
+						{
+							printf("%d bytes transferred.", dataBufLen-1);
+						}
 					}
 					
 					free(dataBuf);
 				}
+			}
+			
+		return tempStatus;
+	}
+	
+	else if(strcmp(ap_argv[0], "put") == 0 && a_argc > 1)
+	{
+		char srcPath[PATH_MAX+1];
+		String src, dst;
+		
+		// init vars
+			tempStatus = false;
+			src = ap_argv[1];
+			dst = (a_argc > 2) ? ap_argv[2] : src;
+			
+		// build command with param='put remote-path'
+			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
+			Message_setValue(&msgOut, ap_argv[0]);
+			strcat(Message_getValue(&msgOut), " ");
+			strcat(Message_getValue(&msgOut), dst);
+			
+		// try to read source file
+			if(service_getAbsolutePath(g_pwd, src, srcPath) && (dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
+			{
+				// client: i'm sending a file
+				if(remote_exec(a_socket, &msgOut))
+				{
+					// server: OK to send file
+					
+					// client: here is the file
+					if((tempStatus = (siftp_sendData(a_socket, dataBuf, dataBufLen) && service_recvStatus(a_socket))))
+					{
+						// server: success
+					
+						printf("%d bytes transferred.", dataBufLen-1);
+					}
+						
+					#ifndef NODEBUG 
+						printf("put(): sent file '%s'.\n", srcPath);
+					#endif
+				}
+				
+				free(dataBuf);
 			}
 			
 		return tempStatus;

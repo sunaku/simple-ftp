@@ -5,7 +5,7 @@
  * SimpleFTP server implementation.
 **/
 
-#include "model.h"
+#include "service.h"
 #include "server.h"
 
 #include <sys/socket.h>
@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <errno.h>
 
 // globals
 	char g_pwd[PATH_MAX+1];
@@ -181,6 +182,9 @@ void service_loop(const int a_socket)
 	// variables
 		Message msg;
 		
+		String *p_argv;
+		int argc;
+		
 	// init vars
 		Message_clear(&msg);
 	
@@ -191,13 +195,29 @@ void service_loop(const int a_socket)
 		
 		else
 		{
+			#ifndef NODEBUG
+				printf("service_loop(): got command {str='%s',arg='%s'}\n", Message_getValue(&msg), strchr(Message_getValue(&msg), ' '));
+			#endif
+			
 			// parse request
-				#ifndef NODEBUG
-					printf("service_loop(): got command {str='%s',arg='%s'}\n", Message_getValue(&msg), strchr(Message_getValue(&msg), ' '));
-				#endif
+				if((p_argv = service_parseArgs(Message_getValue(&msg), &argc)) == NULL || argc <= 0)
+				{
+					service_freeArgs(p_argv, argc);
+					
+					if(!service_sendStatus(a_socket, false)) // send negative ack
+						break;
+					
+					continue;
+				}
 				
 			// handle request
-				service_handleCmd(a_socket, Message_getValue(&msg));
+				if(!service_handleCmd(a_socket, p_argv, argc))
+					service_sendStatus(a_socket, false); // send negative ack upon fail
+				
+			// clean up
+				service_freeArgs(p_argv, argc);
+				p_argv = NULL;
+				
 				/*
 				if(!service_handleCmd(a_socket, Message_getValue(&msg))) // send failure notification
 				{
@@ -215,38 +235,29 @@ void service_loop(const int a_socket)
 }
 
 
-Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
+Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a_argc)
 {
 	// variables
-		Message msgOut, msgIn;
+		Message msg;
 		
-		char cmdName[MODEL_COMMAND_SIZE+1];
-		String cmdArg, dataBuf;
+		String dataBuf;
 		int dataBufLen;
 		
 		Boolean tempStatus;
 		
 	// init variables
-		Message_clear(&msgOut);
-		Message_clear(&msgIn);
+		Message_clear(&msg);
 		
-		// command name
-			memset(cmdName, 0, sizeof(cmdName));
-			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
-		
-		// argument string
-			if((cmdArg = strchr(a_cmdStr, ' ')) != NULL)
-				cmdArg += sizeof(char);
-		
-	if(strstr(cmdName, "ls"))
+	// handle commands
+	if(strcmp(ap_argv[0], "ls") == 0)
 	{
-		if((dataBuf = service_handleCmd_readDir(g_pwd, &dataBufLen)) != NULL)
+		if((dataBuf = service_readDir(g_pwd, &dataBufLen)) != NULL)
 		{
 			// transmit data
-				if(service_handleCmd_sendStatus(a_socket, true))
+				if(service_sendStatus(a_socket, true))
 					tempStatus = siftp_sendData(a_socket, dataBuf, dataBufLen);
 				
-				#ifndef NODEBUG 
+				#ifndef NODEBUG
 					printf("ls(): status=%d\n", tempStatus);
 				#endif
 				
@@ -257,33 +268,79 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 		}
 	}
 	
-	else if(strstr(cmdName, "pwd"))
+	else if(strcmp(ap_argv[0], "pwd") == 0)
 	{
-		if(service_handleCmd_sendStatus(a_socket, true))
+		if(service_sendStatus(a_socket, true))
 			return siftp_sendData(a_socket, g_pwd, strlen(g_pwd));
 	}
 	
-	else if(strstr(cmdName, "cd"))
+	else if(strcmp(ap_argv[0], "cd") == 0 && a_argc > 1)
 	{
-		return service_handleCmd_sendStatus(a_socket, service_handleCmd_chdir(a_cmdStr, cmdArg, g_pwd));
+		return service_sendStatus(a_socket, service_handleCmd_chdir(g_pwd, ap_argv[1]));
 	}
 	
-	else if(strstr(cmdName, "get"))
+	else if(strcmp(ap_argv[0], "get") == 0 && a_argc > 1)
 	{
-		String srcFn;
 		char srcPath[PATH_MAX+1];
 		
 		// init vars
-			if((srcFn = service_handleCmd_getNextArg(cmdArg)) == NULL)
-				srcFn = cmdArg;
-			
-		// send file
-			if(service_getAbsolutePath(g_pwd, srcFn, srcPath) && service_handleCmd_sendFile(a_socket, srcPath))
+			tempStatus = false;
+		
+		// send source file
+			if(service_getAbsolutePath(g_pwd, ap_argv[1], srcPath) && (dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
 			{
-				return true;
+				if(service_sendStatus(a_socket, true))
+				{
+					tempStatus = siftp_sendData(a_socket, dataBuf, dataBufLen);
+					
+					#ifndef NODEBUG 
+						printf("get(): sent file '%s'.\n", srcPath);
+					#endif
+				}
+				
+				free(dataBuf);
 			}
+			
+		return tempStatus;
 	}
 	
-	// send negative ack upon fail
-	return service_handleCmd_sendStatus(a_socket, false);
+	else if(strcmp(ap_argv[0], "put") == 0 && a_argc > 1)
+	{
+		char dstPath[PATH_MAX+1];
+		struct stat fileStats;
+		
+		// determine destination file path
+		if(service_getAbsolutePath(g_pwd, ap_argv[1], dstPath))
+		{
+			// check write perms
+			if((stat(dstPath, &fileStats) >= 0 && !S_ISDIR(fileStats.st_mode) && (fileStats.st_mode & S_IWUSR)) || errno == ENOENT)
+			{
+				// send primary ack: file perms OK
+				if(service_sendStatus(a_socket, true))
+				{
+					// receive file
+					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
+					{
+						tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen-1, SERVICE_FILE_PERMS);
+						
+						free(dataBuf);
+						
+						// send secondary ack: file was written OK
+						if(tempStatus)
+						{
+							return service_sendStatus(a_socket, true);
+						}
+					}
+				}
+			}
+			
+			#ifndef NODEBUG
+				int e = errno;
+				perror("put()");
+				printf("put(): errno=%d\n", e);
+			#endif
+		}
+	}
+	
+	return false;
 }
