@@ -2,28 +2,27 @@
  * Suraj Kurapati <skurapat@ucsc.edu>
  * CMPS-150, Spring04, final project
  *
- * SimpleFTP client.
+ * SimpleFTP client interface.
 **/
 
 #include "service.h"
 #include "client.h"
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <sys/stat.h>
 #include <unistd.h>
-#include <netdb.h>
-
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 // globals
-	char g_pwd[PATH_MAX+1];
+	char g_pwd[PATH_MAX+1]; // holds the path of current working directory
 
 // funcs
 int main(int a_argc, char **ap_argv)
@@ -44,7 +43,7 @@ int main(int a_argc, char **ap_argv)
 	// establish link
 		if(!service_create(&socket, ap_argv[1], ap_argv[2]))
 		{
-			fprintf(stderr, "%s: Unable to connect to %s:%s.\n", ap_argv[0], ap_argv[1], ap_argv[2]);
+			fprintf(stderr, "%s: Connection to %s:%s failed.\n", ap_argv[0], ap_argv[1], ap_argv[2]);
 			return 2;
 		}
 		
@@ -53,7 +52,7 @@ int main(int a_argc, char **ap_argv)
 		{
 			close(socket);
 			
-			fprintf(stderr, "%s: Unable to establish session.\n", ap_argv[0]);
+			fprintf(stderr, "%s: Session failed.\n", ap_argv[0]);
 			return 3;
 		}
 		
@@ -80,6 +79,8 @@ Boolean service_create(int *ap_socket, const String a_serverName, const String a
 		
 	// create server address
 		
+		memset(&serverAddr, 0, sizeof(serverAddr));
+		
 		// determine dotted quad str from DNS query
 			if((p_serverInfo = gethostbyname(a_serverName)) == NULL)
 			{
@@ -99,14 +100,14 @@ Boolean service_create(int *ap_socket, const String a_serverName, const String a
 	// create socket
 		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
 		{
-			perror("service_create()");
+			perror("service_create(): create socket");
 			return false;
 		}
 	
 	// connect on socket
 		if((connect(*ap_socket, (struct sockaddr *)&serverAddr, sizeof(struct sockaddr))) < 0)
 		{
-			perror("service_create()");
+			perror("service_create(): connect socket");
 			close(*ap_socket);
 			return false;
 		}
@@ -196,7 +197,7 @@ void service_loop(const int a_socket)
 				*bufCR = '\0';
 			
 			#ifndef NODEBUG
-				printf("\nservice_loop(): got command {str='%s',arg='%s'}\n", buf, strchr(buf, ' '));
+				printf("service_loop(): got command '%s'\n", buf);
 			#endif
 			
 		// handle commands
@@ -247,7 +248,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 		String dataBuf;
 		int dataBufLen;
 		
-		Boolean tempStatus;
+		Boolean tempStatus = false;
 		
 	// init variables
 		Message_clear(&msgOut);
@@ -312,7 +313,6 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 		String src, dst;
 		
 		// init vars
-			tempStatus = false;
 			src = ap_argv[1];
 			dst = (a_argc > 2) ? ap_argv[2] : src;
 		
@@ -322,25 +322,33 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 			strcat(Message_getValue(&msgOut), " ");
 			strcat(Message_getValue(&msgOut), src);
 			
-		// perform command
-			if(remote_exec(a_socket, &msgOut))
+		// determine destination file path
+			if(service_getAbsolutePath(g_pwd, dst, dstPath))
 			{
-				// receive destination file
-				if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
+				// check write perms & file type
+				if(service_permTest(dstPath, "a") && service_statTest(dstPath, S_IFMT, S_IFREG))
 				{
-					// determine destination file path
-					if(service_getAbsolutePath(g_pwd, dst, dstPath))
+					// perform command
+					if(remote_exec(a_socket, &msgOut))
 					{
-						// write file
-						if((tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen-1, SERVICE_FILE_PERMS)))
+						// receive destination file
+						if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
 						{
-							printf("%d bytes transferred.", dataBufLen-1);
+							// write file
+							if((tempStatus = service_writeFile(dstPath, dataBuf, dataBufLen, SERVICE_FILE_PERMS)))
+							{
+								printf("%d bytes transferred.", dataBufLen);
+							}
+							
+							free(dataBuf);
 						}
 					}
-					
-					free(dataBuf);
 				}
 			}
+			
+			#ifndef NODEBUG
+				perror("get()");
+			#endif
 			
 		return tempStatus;
 	}
@@ -351,7 +359,6 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 		String src, dst;
 		
 		// init vars
-			tempStatus = false;
 			src = ap_argv[1];
 			dst = (a_argc > 2) ? ap_argv[2] : src;
 			
@@ -361,29 +368,42 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 			strcat(Message_getValue(&msgOut), " ");
 			strcat(Message_getValue(&msgOut), dst);
 			
-		// try to read source file
-			if(service_getAbsolutePath(g_pwd, src, srcPath) && (dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
+		// determine source path
+			if(service_getAbsolutePath(g_pwd, src, srcPath))
 			{
-				// client: i'm sending a file
-				if(remote_exec(a_socket, &msgOut))
+				// check read perms & file type
+				if(service_permTest(srcPath, "r") && service_statTest(srcPath, S_IFMT, S_IFREG))
 				{
-					// server: OK to send file
-					
-					// client: here is the file
-					if((tempStatus = (siftp_sendData(a_socket, dataBuf, dataBufLen) && service_recvStatus(a_socket))))
+					// try to read source file
+					if((dataBuf = service_readFile(srcPath, &dataBufLen)) != NULL)
 					{
-						// server: success
-					
-						printf("%d bytes transferred.", dataBufLen-1);
-					}
+						// client: i'm sending a file
+						if(remote_exec(a_socket, &msgOut))
+						{
+							// server: OK to send file
+							
+							// client: here is the file
+							if((tempStatus = (siftp_sendData(a_socket, dataBuf, dataBufLen) && service_recvStatus(a_socket))))
+							{
+								// server: success
+							
+								printf("%d bytes transferred.", dataBufLen-1);
+							}
+								
+							#ifndef NODEBUG 
+								printf("put(): sent file '%s'.\n", srcPath);
+							#endif
+						}
 						
-					#ifndef NODEBUG 
-						printf("put(): sent file '%s'.\n", srcPath);
-					#endif
+						free(dataBuf);
+					}
 				}
-				
-				free(dataBuf);
 			}
+			
+			
+			#ifndef NODEBUG
+				perror("put()");
+			#endif
 			
 		return tempStatus;
 	}
