@@ -123,7 +123,7 @@ String* service_parseArgs(const String a_cmdStr, int *ap_argc)
 		*ap_argc = i;
 		
 		#ifndef NODEBUG
-			for(i=0; i<*ap_argc; i++)
+			for(i = 0; i<*ap_argc; i++)
 				printf("parseArgs(): argv[%d]='%s', addr=%p\n", i, p_args[i], p_args[i]);
 		#endif
 		
@@ -142,7 +142,7 @@ void service_freeArgs(String *ap_argv, const int a_argc)
 	int i;
 	
 	// free array items
-	for(i=0; i<a_argc; i++)
+	for(i = 0; i<a_argc; i++)
 	{
 		if(ap_argv[i] != NULL)
 			free(ap_argv[i]);
@@ -213,10 +213,10 @@ String service_readFile(const String a_path, int *ap_length)
 				rewind(p_fileFd);
 				
 			// allocate buffer
-				if((buf = calloc(*ap_length+1, sizeof(char))) == NULL) // +1 for null term
+				if((buf = calloc(*ap_length, sizeof(char))) == NULL)
 				{
 					fclose(p_fileFd);
-					*ap_length=0;
+					*ap_length = 0;
 					
 					fprintf(stderr, "readFile(): buffer alloc failed.\n");
 					return false;
@@ -229,7 +229,7 @@ String service_readFile(const String a_path, int *ap_length)
 					
 					free(buf);
 					buf = NULL;
-					*ap_length=0;
+					*ap_length = 0;
 				}
 		}
 		else
@@ -241,12 +241,11 @@ String service_readFile(const String a_path, int *ap_length)
 
 String service_readDir(const String a_path, int *ap_length)
 {
-	// variables
-		String buf = NULL;
-		int i;
-		
-		DIR *p_dirFd;
-		struct dirent *p_dirInfo;
+	String buf = NULL;
+	int i;
+	
+	DIR *p_dirFd;
+	struct dirent *p_dirInfo;
 
 	if((p_dirFd = opendir(a_path)) == NULL)
 	{
@@ -255,10 +254,10 @@ String service_readDir(const String a_path, int *ap_length)
 	else
 	{
 		// determine buffer size
-			*ap_length=0;
+			*ap_length = 0;
 			
 			while((p_dirInfo = readdir(p_dirFd)))
-				*ap_length += strlen(p_dirInfo->d_name) + 1;
+				*ap_length += strlen(p_dirInfo->d_name) + 1; // +1 for newline at end of string
 			
 			#ifndef NODEBUG
 				printf("service_readDir(): buffer size = %d\n", *ap_length);
@@ -270,13 +269,14 @@ String service_readDir(const String a_path, int *ap_length)
 			if((buf = calloc(*ap_length, sizeof(char))) == NULL)
 			{
 				closedir(p_dirFd);
+				*ap_length = 0;
 				
 				fprintf(stderr, "service_readDir(): calloc() for buffer failed.\n");
 				return false;
 			}
 		
 		// read contents into buffer
-			i=0;
+			i = 0;
 			
 			while((p_dirInfo = readdir(p_dirFd)))
 			{
@@ -287,7 +287,7 @@ String service_readDir(const String a_path, int *ap_length)
 				#endif
 				
 				i += strlen(p_dirInfo->d_name);
-				buf[i++] = '\n'; // overwrite null term
+				buf[i++] = '\n'; // append newline
 				
 				#ifndef NODEBUG
 					printf("service_readDir()(): buffer {index=%d,val='%s'}\n", i, buf);
@@ -307,7 +307,7 @@ Boolean service_writeFile(const String a_path, const String a_data, const int a_
 	
 	if((fileFd = creat(a_path, a_mode)) >= 0)
 	{
-		if(write(fileFd, a_data, a_length) != -1)
+		if(write(fileFd, a_data, a_length) != a_length)
 		{
 			result = true;
 			
