@@ -5,7 +5,7 @@
  * SimpleFTP server implementation.
 **/
 
-#include "client.h"
+#include "server.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -52,6 +52,10 @@ int main(int a_argc, char **ap_argv)
 			// wait for a client
 				clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &clientSocketSize);
 			
+				#ifndef NODEBUG
+					printf("\nmain(): got client connection [addr=%x,port=%d]\n", ntohl(clientAddr.sin_addr.s_addr), ntohs(clientAddr.sin_port));
+				#endif
+				
 			// dispatch job
 				if(fork() == 0) // child code
 				{
@@ -73,25 +77,25 @@ int main(int a_argc, char **ap_argv)
 	return 0;
 }
 
-Boolean service_create(int *ap_socket, struct sockaddr_in *ap_addr, const String a_port)
+Boolean service_create(int *ap_socket, const String a_port)
 {
 	// variables
+		struct sockaddr_in serverAddr;
 		
 	// create address
-		ap_addr->sin_family = htonl(AF_INET);
-		ap_addr->sin_addr.s_addr = htonl(INADDR_ANY);
-		ap_addr->sin_port = htons(strtol(a_port, (char**)NULL, 10));
-		memset(&(ap_addr.sin_zero), '\0', 8);  // zero the rest of the struct
+		serverAddr.sin_family = htonl(AF_INET);
+		serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+		serverAddr.sin_port = htons(strtol(a_port, (char**)NULL, 10));
 		
 	// create socket
-		if((*ap_socket = socket(ap_addr->sin_family, SOCK_STREAM, 0)) < 0)
+		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
 		{
 			perror("service_create");
 			return false;
 		}
 	
 	// bind socket
-		if(bind(*ap_socket, (struct sockaddr *)ap_addr, sizeof(struct sockaddr)) < 0)
+		if(bind(*ap_socket, (struct sockaddr *)&serverAddr, sizeof(struct sockaddr)) < 0)
 		{
 			perror("service_create");
 			close(*ap_socket);
