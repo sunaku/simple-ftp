@@ -268,6 +268,22 @@ Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 		return service_handleCmd_sendStatus(a_socket, service_handleCmd_chdir(a_cmdStr, cmdArg, g_pwd));
 	}
 	
+	else if(strstr(cmdName, "get"))
+	{
+		String srcFn;
+		char srcPath[PATH_MAX+1];
+		
+		// init vars
+			if((srcFn = service_handleCmd_getNextArg(cmdArg)) == NULL)
+				srcFn = cmdArg;
+			
+		// send file
+			if(service_getAbsolutePath(g_pwd, srcFn, srcPath) && service_handleCmd_sendFile(a_socket, srcPath))
+			{
+				return true;
+			}
+	}
+	
 	// send negative ack upon fail
 	return service_handleCmd_sendStatus(a_socket, false);
 }
