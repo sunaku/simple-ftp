@@ -37,7 +37,6 @@
 			#define SIFTP_VERBS_COMMAND	"CMND"
 			#define SIFTP_VERBS_COMMAND_STATUS	"CMST"
 			
-			#define SIFTP_VERBS_DATA_GRAM	"DGRM"
 			#define SIFTP_VERBS_DATA_STREAM_HEADER	"DSTH" /** param = [data_size_in_bytes] */
 			#define SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT	"%d"
 			#define SIFTP_VERBS_DATA_STREAM_PAYLOAD	"DSTP"
@@ -177,9 +176,9 @@
 		Boolean siftp_sendData(const int a_socket, const String a_data, const int a_length);
 		
 		/**
-		 * Performs a data transfer dialouge.
+		 * Returns the data from a transfer dialouge. The returned data is null terminated.
 		 * @param	a_socket	Socket descriptor on which to receive.
-		 * @param	ap_length	Storage for length of received data.
+		 * @param	ap_length	Storage for length of received data (excluding null terminator).
 		 * @note	returns a dynamically allocated object.
 		 */
 		String siftp_recvData(const int a_socket, int *ap_length);

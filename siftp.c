@@ -74,7 +74,7 @@
 				}
 				
 			// copy payload into buffer whilst escaping it
-				for(i=0, j=0; i < len; i++, j++)
+				for(i=0, j = 0; i < len; i++, j++)
 				{
 					if((buf[j] = a_str[i]) == SIFTP_FLAG) // copy char
 						buf[++j] = SIFTP_FLAG; // escape the flag
@@ -105,7 +105,7 @@
 				}
 				
 			// copy payload into buffer whilst unescaping it
-				for(i=0, j=0; i < len; i++, j++)
+				for(i=0, j = 0; i < len; i++, j++)
 				{
 					if((buf[j] = a_str[i]) == SIFTP_FLAG) // copy char
 						i++; // skip rest of the escaped flag
@@ -202,39 +202,29 @@
 				printf("siftp_sendData(): data length = %d\n", a_length);
 			#endif
 				
-			if(a_length <= SIFTP_PARAMETER_SIZE) // send as "datagram"
-			{
-				Message_setType(&msgOut, SIFTP_VERBS_DATA_GRAM);
-				Message_setValue(&msgOut, a_data);
-				return siftp_send(a_socket, &msgOut);
+			// header
+				Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_HEADER);
+				sprintf(msgOut.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, a_length);
+				
+				if(!siftp_send(a_socket, &msgOut))
+					return false;
 			
-			}
-			else // send as data stream
-			{
-				// header
-					Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_HEADER);
-					sprintf(msgOut.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, a_length);
+			// send data as discrete messages
+				Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_PAYLOAD);
+				
+				for(tempLen = 0; tempLen < a_length; tempLen += SIFTP_PARAMETER_SIZE)
+				{
+					memset(&msgOut.m_param, 0, sizeof(msgOut.m_param));
+					strncpy(msgOut.m_param, &a_data[tempLen], SIFTP_PARAMETER_SIZE);
 					
 					if(!siftp_send(a_socket, &msgOut))
 						return false;
-				
-				// send data as discrete messages
-					Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_PAYLOAD);
-					
-					for(tempLen=0; tempLen < a_length; tempLen += SIFTP_PARAMETER_SIZE)
-					{
-						memset(&msgOut.m_param, 0, sizeof(msgOut.m_param));
-						strncpy(msgOut.m_param, &a_data[tempLen], SIFTP_PARAMETER_SIZE);
-						
-						if(!siftp_send(a_socket, &msgOut))
-							return false;
-					}
-				
-				// tailer
-					Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_TAILER);
-					Message_setValue(&msgOut, "");
-					return siftp_send(a_socket, &msgOut);
-			}
+				}
+			
+			// tailer
+				Message_setType(&msgOut, SIFTP_VERBS_DATA_STREAM_TAILER);
+				Message_setValue(&msgOut, "");
+				return siftp_send(a_socket, &msgOut);
 		}
 		
 		String siftp_recvData(const int a_socket, int *ap_length)
@@ -251,26 +241,7 @@
 				if(!siftp_recv(a_socket, &msgIn))
 					return NULL;
 				
-				if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_GRAM)) // gram
-				{
-					*ap_length = strlen(msgIn.m_param);
-					
-					// allocate space
-						if((buf = calloc(*ap_length+1,  sizeof(char))) == NULL)
-						{
-							*ap_length=0;
-							
-							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
-							return NULL;
-						}
-					
-					strcpy(buf, msgIn.m_param);
-					
-					#ifndef NODEBUG
-						printf("siftp_recvData(): got a data gram\n");
-					#endif
-				}
-				else if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_HEADER)) // stream
+				if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_HEADER)) // stream
 				{
 					// allocate space
 						sscanf(msgIn.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, ap_length);
@@ -279,25 +250,25 @@
 							printf("siftp_recvData(): data length = %d\n", *ap_length);
 						#endif
 						
-						if((buf = calloc(*ap_length+1, sizeof(char))) == NULL)
+						if((buf = calloc(*ap_length+1, sizeof(char))) == NULL) // +1 for null term
 						{
 							// XXX not implemented: "client: cancel transmission"
 							
-							*ap_length=0;
+							*ap_length = 0;
 							
 							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
 							return NULL;
 						}
 						
 					// read stream into buffer
-						tempLen=0;
+						tempLen = 0;
 						
 						do
 						{
 							// read stream
 								if(!siftp_recv(a_socket, &msgIn))
 								{
-									*ap_length=0;
+									*ap_length = 0;
 									
 									free(buf);
 									return NULL;
@@ -324,7 +295,7 @@
 								{
 									fprintf(stderr, "siftp_recvData(): transfer aborted by remote host.\n");
 									
-									*ap_length=0;
+									*ap_length = 0;
 									
 									free(buf);
 									return NULL;
