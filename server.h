@@ -10,25 +10,18 @@
 
 #include "siftp.h"
 
-	/* debugging */
-	
 	/* constants */
 	
 		#define SERVER_SOCKET_BACKLOG	5
 		#define SERVER_PASSWORD	"ce150"
 	
-	/* typedefs */
-	
-	/* structs */
-		
-	/* constructors */
-		
-	/* utility functions */
+	/* services */
 	
 		/**
 		 * Establishes a network service on the specified port.
-		 * @param	ap_socket		Storage for socket descriptor.
+		 * @param	ap_socket	Storage for socket descriptor.
+		 * @param	a_port	Port number in decimal.
 		 */
-		Boolean service_create(int *ap_socket, const String a_port);
+		Boolean service_create(int *ap_socket, const int a_port);
 		
 #endif

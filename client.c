@@ -41,7 +41,7 @@ int main(int a_argc, char **ap_argv)
 		realpath(".", g_pwd);
 		
 	// establish link
-		if(!service_create(&socket, ap_argv[1], ap_argv[2]))
+		if(!service_create(&socket, ap_argv[1], strtol(ap_argv[2], (char**)NULL, 10)))
 		{
 			fprintf(stderr, "%s: Connection to %s:%s failed.\n", ap_argv[0], ap_argv[1], ap_argv[2]);
 			return 2;
@@ -71,7 +71,7 @@ int main(int a_argc, char **ap_argv)
 	return 0;
 }
 
-Boolean service_create(int *ap_socket, const String a_serverName, const String a_serverPort)
+Boolean service_create(int *ap_socket, const String a_serverName, const int a_serverPort)
 {
 	// variables
 		struct sockaddr_in serverAddr;
@@ -95,7 +95,7 @@ Boolean service_create(int *ap_socket, const String a_serverName, const String a
 			serverAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr *)p_serverInfo->h_addr)));
 			
 		serverAddr.sin_family = AF_INET;
-		serverAddr.sin_port = htons(strtol(a_serverPort, (char**)NULL, 10));
+		serverAddr.sin_port = htons(a_serverPort);
 		
 	// create socket
 		if((*ap_socket = socket(serverAddr.sin_family, SOCK_STREAM, 0)) < 0)
