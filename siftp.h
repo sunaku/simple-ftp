@@ -152,11 +152,6 @@
 		Boolean siftp_deserialize(const String a_str, Message *ap_result);
 		
 		/**
-		 * Performs a simple query/response dialogue.
-		 */
-		Boolean siftp_query(const int a_socket, const Message *ap_query, Message *ap_response);
-		
-		/**
 		 * Performs a one-way dialouge.
 		 */
 		Boolean siftp_send(const int a_socket, const Message *ap_query);

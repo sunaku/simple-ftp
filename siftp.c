@@ -151,26 +151,6 @@
 				
 			return true;
 		}
-
-		Boolean siftp_query(const int a_socket, const Message *ap_query, Message *ap_response)
-		{
-			// variables
-				char buf[SIFTP_MESSAGE_SIZE];
-				
-			// serialize message
-				if(!siftp_serialize(ap_query, buf))
-				{
-					fprintf(stderr, "siftp_query(): Message serialization failed.\n");
-					return false;
-				}
-				
-			// perform dialouge
-				send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
-				recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
-				
-			// deserialize message
-				return siftp_deserialize(buf, ap_response);
-		}
 		
 		Boolean siftp_send(const int a_socket, const Message *ap_query)
 		{
@@ -180,14 +160,17 @@
 			// serialize message
 				if(!siftp_serialize(ap_query, buf))
 				{
-					fprintf(stderr, "siftp_query(): Message serialization failed.\n");
+					fprintf(stderr, "siftp_send(): Message serialization failed.\n");
 					return false;
 				}
 				
-			// perform dialouge
-				send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
-				
-			return true;
+			if(send(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) >= 0)
+				return true;
+			else
+			{
+				fprintf(stderr, "siftp_send(): send() failed.\n");
+				return false;
+			}
 		}
 		
 		Boolean siftp_recv(const int a_socket, Message *ap_response)
@@ -195,25 +178,27 @@
 			// variables
 				char buf[SIFTP_MESSAGE_SIZE];
 				
-			// perform dialouge
-				recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0);
-				
-			// deserialize message
+			if(recv(a_socket, buf, SIFTP_MESSAGE_SIZE, 0) >= 0)
 				return siftp_deserialize(buf, ap_response);
+			else
+			{
+				fprintf(stderr, "siftp_recv(): recv() failed.\n");
+				return false;
+			}
 		}
 		
 		Boolean siftp_sendData(const int a_socket, const String a_data, const int a_length)
 		{
-			#ifndef NODEBUG
-				printf("siftp_sendData(): data length = %d\n", a_length);
-			#endif
-			
 			// variables
 				Message msgOut;
 				int tempLen;
 				
 			// init vars
 				memset(&msgOut, 0, sizeof(msgOut));
+			
+			#ifndef NODEBUG
+				printf("siftp_sendData(): data length = %d\n", a_length);
+			#endif
 				
 			if(a_length <= SIFTP_PARAMETER_SIZE) // send as "datagram"
 			{
@@ -263,20 +248,24 @@
 				if(!siftp_recv(a_socket, &msgIn))
 					return false;
 				
-				if(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_GRAM) == 0) // gram
+				if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_GRAM)) // gram
 				{
 					*ap_length = strlen(msgIn.m_param);
 					
 					// allocate space
-					if((buf = calloc(++*ap_length,  sizeof(char))) == NULL) // +1 for null term
-					{
-						fprintf(stderr, "cmd_ls(): calloc() failed.\n");
-						return false;
-					}
+						if((buf = calloc(++*ap_length,  sizeof(char))) == NULL) // +1 for null term
+						{
+							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
+							return false;
+						}
 					
 					strcpy(buf, msgIn.m_param);
+					
+					#ifndef NODEBUG
+						printf("siftp_recvData(): got a data gram\n");
+					#endif
 				}
-				else if(strcmp(msgIn.m_verb, SIFTP_VERBS_DATA_STREAM_HEADER) == 0) // stream
+				else if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_HEADER)) // stream
 				{
 					// allocate space
 						sscanf(msgIn.m_param, SIFTP_VERBS_DATA_STREAM_HEADER_LENFMT, ap_length);
@@ -304,6 +293,10 @@
 									free(buf);
 									return NULL;
 								}
+								
+								#ifndef NODEBUG
+									printf("siftp_recvData(): got Message from stream.\n");
+								#endif
 							
 							// store data
 								if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_STREAM_PAYLOAD))

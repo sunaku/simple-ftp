@@ -127,7 +127,7 @@ Boolean session_create(const int a_socket)
 		// server: identify
 			Message_setType(&msgOut, SIFTP_VERBS_SESSION_BEGIN);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_IDENTIFY))
+			if(!service_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_IDENTIFY))
 			{
 				fprintf(stderr, "session_create(): connection request rejected.\n");
 				return false;
@@ -137,7 +137,7 @@ Boolean session_create(const int a_socket)
 		// server: accept|deny
 			Message_setType(&msgOut, SIFTP_VERBS_USERNAME);
 			
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
+			if(!service_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
 			{
 				fprintf(stderr, "session_create(): username rejected.\n");
 				return false;
@@ -152,7 +152,7 @@ Boolean session_create(const int a_socket)
 				printf("\npassword: ");
 				scanf("%s", msgOut.m_param);
 		
-			if(!siftp_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
+			if(!service_query(a_socket, &msgOut, &msgIn) || !Message_hasType(&msgIn, SIFTP_VERBS_ACCEPTED))
 			{
 				fprintf(stderr, "session_create(): password rejected.\n");
 				return false;
@@ -210,7 +210,7 @@ void service_loop(const int a_socket)
 			}
 			else if(strlen(buf) > 0)
 			{
-				status = service_command(a_socket, buf);
+				status = service_handleCmd(a_socket, buf);
 			}
 			else
 				continue;
@@ -221,58 +221,47 @@ void service_loop(const int a_socket)
 	}
 }
 
-Boolean service_command(const int a_socket, const String a_cmdStr)
+Boolean service_handleCmd(const int a_socket, const String a_cmdStr)
 {
 	// variables
 		Message msgOut, msgIn;
-		Boolean cmdStatus;
 		
 		char cmdName[MODEL_COMMAND_SIZE+1];
 		String cmdArg, dataBuf;
 		int dataBufLen;
-		
-		DIR *p_dirFd;
-		struct dirent *p_dirInfo;
-		
 		
 	// init variables
 		Message_clear(&msgOut);
 		Message_clear(&msgIn);
 		
 		// command name
+			memset(cmdName, 0, sizeof(cmdName));
 			strncpy(cmdName, a_cmdStr, MODEL_COMMAND_SIZE);
-			cmdName[MODEL_COMMAND_SIZE] = '\0';
 		
 		// argument string
 			if((cmdArg = strchr(a_cmdStr, ' ')) != NULL)
 				cmdArg += sizeof(char);
 		
-		cmdStatus = true;
-	
 	if(strstr(cmdName, "lls"))
 	{
-		if((p_dirFd = opendir(g_pwd)) != NULL)
+		if((dataBuf = service_handleCmd_readDir(g_pwd, &dataBufLen)) != NULL)
 		{
-			while((p_dirInfo = readdir(p_dirFd)))
-				printf("%s\n", p_dirInfo->d_name); // display contents
+			printf("%s", dataBuf);
+			free(dataBuf);
 			
-			closedir(p_dirFd);
-		}
-		else
-		{
-			perror(a_cmdStr);
-			cmdStatus = false;
+			return true;
 		}
 	}
 	
 	else if(strstr(cmdName, "lpwd"))
 	{
 		printf("%s", g_pwd);
+		return true;
 	}
 	
 	else if(strstr(cmdName, "lcd"))
 	{
-		cmdStatus = service_command_chdir(a_cmdStr, cmdArg, g_pwd);
+		return service_handleCmd_chdir(a_cmdStr, cmdArg, g_pwd);
 	}
 	
 	else if(strstr(cmdName, "ls") || strstr(cmdName, "pwd") || strstr(cmdName, "cd"))
@@ -282,44 +271,20 @@ Boolean service_command(const int a_socket, const String a_cmdStr)
 			Message_setValue(&msgOut, a_cmdStr);
 		
 		// perform command
-			if(remote_command(a_socket, &msgOut, &msgIn))
+			if(remote_exec(a_socket, &msgOut))
 			{
-				if(strstr(cmdName, "cd") == NULL) // this command doesn't print output
-				{
-					dataBuf = siftp_recvData(a_socket, &dataBufLen);
-					printf("%s", dataBuf);
-					
-					// clean up
+				//if(strstr(cmdName, "cd") == NULL) // this command doesn't print output
+				//{
+					if((dataBuf = siftp_recvData(a_socket, &dataBufLen)) != NULL)
+					{
+						printf("%s", dataBuf);
 						free(dataBuf);
-						dataBuf = NULL;
-				}
+						
+						return true;
+					}
+				//}
 			}
-			else
-				cmdStatus = false;
 	}
 	
-	
-	else if(strstr(cmdName, "cd"))
-	{
-		// build query
-			Message_setType(&msgOut, SIFTP_VERBS_COMMAND);
-			Message_setValue(&msgOut, "pwd");
-		
-		// perform command
-			if(!remote_command(a_socket, &msgOut, &msgIn))
-				return false;
-			
-		// print result
-			dataBuf = siftp_recvData(a_socket, &dataBufLen);
-			printf("%s", dataBuf);
-			
-			// clean up
-				free(dataBuf);
-				dataBuf = NULL;
-	}
-	
-	else
-		cmdStatus = false;
-	
-	return cmdStatus;
+	return false;
 }

@@ -9,11 +9,15 @@
 #define MODEL_H
 
 #include "siftp.h"
+
+#include <unistd.h>
 #include <stdio.h>
-#include <string.h>
-#include <limits.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
+
 
 	/* debugging */
 	
@@ -60,24 +64,59 @@
 		void service_loop(const int a_socket);
 	
 		/**
+		 * Performs a simple two-way query & response dialouge.
+		 */
+		inline Boolean service_query(const int a_socket, const Message *ap_query, Message *ap_response)
+		{
+			return siftp_send(a_socket, ap_query) && siftp_recv(a_socket, ap_response);
+		};
+		
+		/**
 		 * Handles commands given in interaction/dialouge.
 		 */
-		Boolean service_command(const int a_socket, const String a_cmdStr);
+		Boolean service_handleCmd(const int a_socket, const String a_cmdStr);
 		
+		/**
+		 * Sends a command status acknowlegdement for a command.
+		 */
+		Boolean service_handleCmd_sendStatus(const int a_socket, const Boolean a_wasSuccess)
+		{
+			Message msg;
+			
+			// init variables
+				Message_clear(&msg);
+				Message_setType(&msg, SIFTP_VERBS_COMMAND_STATUS);
+				Message_setValue(&msg, a_wasSuccess ? "true" : "false");
+				
+			return siftp_send(a_socket, &msg);
+		};
+		
+		/**
+		 * Returns the value of the command staus acknowlegdement.
+		 */
+		inline Boolean service_handleCmd_recvStatus(const int a_socket)
+		{
+			Message msg;
+			
+			// init vars
+				Message_clear(&msg);
+			
+			return (siftp_recv(a_socket, &msg) &&  Message_hasType(&msg, SIFTP_VERBS_COMMAND_STATUS) && Message_hasValue(&msg, "true"));
+		};
+
 		/**
 		 * Performs a remote command and returns its status.
 		 */
-		inline Boolean remote_command(const int a_socket, Message *ap_query, Message *ap_response)
+		inline Boolean remote_exec(const int a_socket, Message *ap_query)
 		{
-			return (siftp_query(a_socket, ap_query, ap_response) &&  Message_hasType(ap_response, SIFTP_VERBS_COMMAND_STATUS) && Message_getValue(ap_response)[0]);
+			return (siftp_send(a_socket, ap_query) &&  service_handleCmd_recvStatus(a_socket));
 		};
-		
 		
 		/**
 		 * Changes the path of the current working dir.
 		 * @param	a_pwd		Storage for new current working dir value.
 		 */
-		Boolean service_command_chdir(const String a_cmdStr, const String a_cmdArg, String a_pwd)
+		Boolean service_handleCmd_chdir(const String a_cmdStr, const String a_cmdArg, String a_pwd)
 		{
 			// check args
 				if(a_cmdArg == NULL)
@@ -114,7 +153,7 @@
 					realpath(tempPath, a_pwd);
 					
 					#ifndef NODEBUG
-						debug("cmd_ls(): tempPath='%s', a_pwd='%s'\n", tempPath, a_pwd);
+						printf("service_handleCmd_chdir()(): tempPath='%s', a_pwd='%s'\n", tempPath, a_pwd);
 					#endif
 				}
 				else
@@ -126,6 +165,108 @@
 			return true;
 		};
 		
+		/**
+		 * Returns contents of a file.
+		 * @param	ap_length	Storage for length (including null terminator) of data.
+		 * Note: returns a malloc()ed object.
+		 */
+		String service_handleCmd_readFile(const String a_path, int *ap_length)
+		{
+			// variables
+				String buf = NULL;
+				FILE *p_fileFd;
+			
+			if((p_fileFd = fopen(a_path, "rb")) == NULL)
+			{
+				perror("service_handleCmd_readFile()");
+			}
+			else
+			{
+				// determine file size
+					fseek(p_fileFd, 0, SEEK_END);
+					*ap_length = ftell(p_fileFd) + 1; // +1 for null term
+					rewind(p_fileFd);
+					
+				// allocate buffer
+					if((buf = calloc(*ap_length, sizeof(char))) == NULL) // +1 for null term
+					{
+						fclose(p_fileFd);
+						
+						fprintf(stderr, "service_handleCmd_readFile(): calloc() for buffer failed.\n");
+						return false;
+					}
+					
+				// read contents into buffer
+				fread(buf, sizeof(char), *ap_length-1, p_fileFd); // -1 to preserve null term
+			}
+			
+			return buf;
+		};
 		
+		/**
+		 * Returns contents of a dir, one entry per line.
+		 * @param	ap_length	Storage for length (including null terminator) of data.
+		 * Note: returns a malloc()ed object.
+		 */
+		String service_handleCmd_readDir(const String a_path, int *ap_length)
+		{
+			// variables
+				String buf = NULL;
+				int i;
+				
+				DIR *p_dirFd;
+				struct dirent *p_dirInfo;
+		
+			if((p_dirFd = opendir(a_path)) == NULL)
+			{
+				perror("service_handleCmd_readDir()");
+			}
+			else
+			{
+				// determine buffer size
+					*ap_length=0;
+					
+					while((p_dirInfo = readdir(p_dirFd)))
+						*ap_length += strlen(p_dirInfo->d_name) + 1;
+					
+					#ifndef NODEBUG
+						printf("service_handleCmd_readDir(): buffer size = %d\n", *ap_length);
+					#endif
+					
+					rewinddir(p_dirFd);
+					
+				// allocate buffer
+					if((buf = calloc(*ap_length, sizeof(char))) == NULL)
+					{
+						closedir(p_dirFd);
+						
+						fprintf(stderr, "service_handleCmd_readDir(): calloc() for buffer failed.\n");
+						return false;
+					}
+				
+				// read contents into buffer
+					i=0;
+					
+					while((p_dirInfo = readdir(p_dirFd)))
+					{
+						strcpy(&buf[i], p_dirInfo->d_name);
+						
+						#ifndef NODEBUG
+							printf("service_handleCmd_readDir()(): buffer[%d]='%s'\n", i, &buf[i]);
+						#endif
+						
+						i += strlen(p_dirInfo->d_name);
+						buf[i++] = '\n'; // overwrite null term
+						
+						#ifndef NODEBUG
+							printf("service_handleCmd_readDir()(): buffer {index=%d,val='%s'}\n", i, buf);
+						#endif
+					}
+					
+					closedir(p_dirFd);
+			}
+			
+			return buf;
+		};
 #endif
 
