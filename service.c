@@ -15,7 +15,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <dirent.h>
-#include <fcntl.h>
 
 Boolean session_destroy(const int a_socket)
 {

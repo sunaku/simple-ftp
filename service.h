@@ -13,8 +13,6 @@
 
 #include "siftp.h"
 
-#include <fcntl.h>
-
 	/* constants */
 	
 		/** max length of a service command's name */
