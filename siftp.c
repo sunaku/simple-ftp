@@ -246,7 +246,7 @@
 				
 			// determine transfer type
 				if(!siftp_recv(a_socket, &msgIn))
-					return false;
+					return NULL;
 				
 				if(Message_hasType(&msgIn, SIFTP_VERBS_DATA_GRAM)) // gram
 				{
@@ -256,7 +256,7 @@
 						if((buf = calloc(++*ap_length,  sizeof(char))) == NULL) // +1 for null term
 						{
 							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
-							return false;
+							return NULL;
 						}
 					
 					strcpy(buf, msgIn.m_param);
@@ -279,7 +279,7 @@
 							// cancel transmission
 							
 							fprintf(stderr, "cmd_ls(): calloc() failed.\n");
-							return false;
+							return NULL;
 						}
 						
 					// read stream into buffer
