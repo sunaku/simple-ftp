@@ -189,7 +189,7 @@ void service_loop(const int a_socket)
 	{
 		// read input
 			printf("\nSimpleFTP> ");
-			memset(&buf, 0, sizeof(buf));
+			memset(&buf, 0, sizeof(buf)); // clear buffer
 			fgets(buf, sizeof(buf), stdin);
 			
 			// remove newline
@@ -202,12 +202,12 @@ void service_loop(const int a_socket)
 			
 		// handle commands
 			status = true;
-			
-			if(strstr(buf, "exit"))
+		
+			if(strcmp(buf, "exit") == 0)
 			{
 				isLooping = false;
 			}
-			else if(strstr(buf, "help"))
+			else if(strcmp(buf, "help") == 0)
 			{
 				printf("\nls\n  displays contents of remote current working directory.\n");
 				printf("\nlls\n  displays contents of local current working directory.\n");
@@ -346,10 +346,6 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 				}
 			}
 			
-			#ifndef NODEBUG
-				perror("get()");
-			#endif
-			
 		return tempStatus;
 	}
 	
@@ -387,7 +383,7 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 							{
 								// server: success
 							
-								printf("%d bytes transferred.", dataBufLen-1);
+								printf("%d bytes transferred.", dataBufLen);
 							}
 								
 							#ifndef NODEBUG 
@@ -399,11 +395,6 @@ Boolean service_handleCmd(const int a_socket, const String *ap_argv, const int a
 					}
 				}
 			}
-			
-			
-			#ifndef NODEBUG
-				perror("put()");
-			#endif
 			
 		return tempStatus;
 	}
