@@ -86,14 +86,14 @@
 		 * Returns the value of the command staus acknowlegdement.
 		 * @param	a_socket	Socket descriptor.
 		 */
-		inline Boolean service_recvStatus(const int a_socket);
+		Boolean service_recvStatus(const int a_socket);
 
 		/**
 		 * Performs a remote command and returns its status.
 		 * @param	a_socket	Socket descriptor.
 		 * @param	ap_query	Message containing command.
 		 */
-		inline Boolean remote_exec(const int a_socket, Message *ap_query);
+		Boolean remote_exec(const int a_socket, Message *ap_query);
 		
 		/**
 		 * Handles a command occuring in interaction/dialouge.
@@ -125,7 +125,7 @@
 		 * @param	a_resultMode	Expected results of test.
 		 * @see	stat.st_mode
 		 */
-		inline Boolean service_statTest(const String a_path, const int a_testMode, const int a_resultMode);
+		Boolean service_statTest(const String a_path, const int a_testMode, const int a_resultMode);
 		
 		/**
 		 * Returns contents of a file or NULL upon error.

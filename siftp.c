@@ -45,7 +45,7 @@
 		return p_msg;
 	}
 	
-	inline void Message_destroy(Message *ap_msg)
+	void Message_destroy(Message *ap_msg)
 	{
 		if(ap_msg != NULL)
 			free(ap_msg);

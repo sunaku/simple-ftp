@@ -79,7 +79,7 @@
 			/**
 			 * Destroys a Message object.
 			 */
-			inline void Message_destroy(Message *ap_msg);
+			void Message_destroy(Message *ap_msg);
 			
 		/* accessors */
 		

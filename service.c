@@ -150,7 +150,7 @@ void service_freeArgs(String *ap_argv, const int a_argc)
 	free(ap_argv);
 }
 
-inline Boolean service_recvStatus(const int a_socket)
+Boolean service_recvStatus(const int a_socket)
 {
 	Message msg;
 	
@@ -160,7 +160,7 @@ inline Boolean service_recvStatus(const int a_socket)
 	return (siftp_recv(a_socket, &msg) &&  Message_hasType(&msg, SIFTP_VERBS_COMMAND_STATUS) && Message_hasValue(&msg, "true"));
 }
 
-inline Boolean remote_exec(const int a_socket, Message *ap_query)
+Boolean remote_exec(const int a_socket, Message *ap_query)
 {
 	return (siftp_send(a_socket, ap_query) &&  service_recvStatus(a_socket));
 }
@@ -325,7 +325,7 @@ Boolean service_permTest(const String a_path, const String a_mode)
 }
 
 
-inline Boolean service_statTest(const String a_path, const int a_testMode, const int a_resultMode)
+Boolean service_statTest(const String a_path, const int a_testMode, const int a_resultMode)
 {
 	struct stat s;
 	
