@@ -1,20 +1,23 @@
-# NOTE: for building on Linux, comment out the $(CFLAGS_SOLARIS) in the $(CFLAGS) variable.
-
-# compiler flags
+# compiler
 CC=gcc
-CFLAGS_SOLARIS=-lnsl -lsocket -lresolv -D_PLATFORM_SOLARIS
-CFLAGS=-Wall -g -O $(CFLAGS_SOLARIS) -DNODEBUG
+CFLAGS=-Wall -g -DNODEBUG
+
+# solaris
+uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
+ifeq ($(uname_S),SunOS)
+	CFLAGS=$(CFLAGS) -lnsl -lsocket -lresolv -D_PLATFORM_SOLARIS
+endif
 
 # targets
 DEPS=siftp.o service.o
-TARGETS=myftp myftpd
+TARGETS=siftp siftpd
 
 all: $(TARGETS)
 
-myftpd: $(DEPS) server.o
+siftpd: $(DEPS) server.o
 	$(CC) $(CFLAGS) -o $@ $^
 
-myftp: $(DEPS) client.o
+siftp: $(DEPS) client.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
